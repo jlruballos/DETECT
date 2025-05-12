@@ -1,0 +1,80 @@
+Loading sequences from: /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/lstm_sequences_vae.npz
+
+--- Fold 1/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.996, F1=0.000, AUC=0.464, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.996, F1=0.000, AUC=0.439, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.323, F1=0.007, AUC=0.497, Precision=0.003, Recall=0.650
+  Epoch 4: Val Acc=0.488, F1=0.006, AUC=0.454, Precision=0.003, Recall=0.400
+  Epoch 5: Val Acc=0.996, F1=0.000, AUC=0.502, Precision=0.000, Recall=0.000
+  Epoch 6: Val Acc=0.996, F1=0.000, AUC=0.480, Precision=0.000, Recall=0.000
+  Epoch 7: Val Acc=0.996, F1=0.000, AUC=0.529, Precision=0.000, Recall=0.000
+  Epoch 8: Val Acc=0.992, F1=0.000, AUC=0.529, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.996, F1=0.000, AUC=0.497, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.995, F1=0.000, AUC=0.502, Precision=0.000, Recall=0.000
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold1.pt
+
+--- Fold 2/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.997, F1=0.000, AUC=0.423, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.993, F1=0.000, AUC=0.433, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.965, F1=0.020, AUC=0.513, Precision=0.011, Recall=0.111
+  Epoch 4: Val Acc=0.997, F1=0.000, AUC=0.474, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.899, F1=0.007, AUC=0.508, Precision=0.004, Recall=0.111
+  Epoch 6: Val Acc=0.839, F1=0.013, AUC=0.540, Precision=0.007, Recall=0.333
+  Epoch 7: Val Acc=0.820, F1=0.008, AUC=0.449, Precision=0.004, Recall=0.222
+  Epoch 8: Val Acc=0.729, F1=0.005, AUC=0.487, Precision=0.003, Recall=0.222
+  Epoch 9: Val Acc=0.995, F1=0.000, AUC=0.471, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.693, F1=0.005, AUC=0.454, Precision=0.002, Recall=0.222
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold2.pt
+
+--- Fold 3/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.997, F1=0.000, AUC=0.485, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.997, F1=0.000, AUC=0.555, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.894, F1=0.013, AUC=0.556, Precision=0.007, Recall=0.267
+  Epoch 4: Val Acc=0.997, F1=0.000, AUC=0.524, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.989, F1=0.030, AUC=0.544, Precision=0.019, Recall=0.067
+  Epoch 6: Val Acc=0.472, F1=0.006, AUC=0.560, Precision=0.003, Recall=0.600
+  Epoch 7: Val Acc=0.228, F1=0.006, AUC=0.576, Precision=0.003, Recall=0.867
+  Epoch 8: Val Acc=0.997, F1=0.000, AUC=0.595, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.997, F1=0.000, AUC=0.579, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.985, F1=0.023, AUC=0.601, Precision=0.014, Recall=0.067
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold3.pt
+
+--- Fold 4/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.994, F1=0.000, AUC=0.492, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.957, F1=0.008, AUC=0.422, Precision=0.005, Recall=0.045
+  Epoch 3: Val Acc=0.996, F1=0.000, AUC=0.389, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.838, F1=0.004, AUC=0.442, Precision=0.002, Recall=0.091
+  Epoch 5: Val Acc=0.340, F1=0.005, AUC=0.422, Precision=0.003, Recall=0.455
+  Epoch 6: Val Acc=0.461, F1=0.007, AUC=0.457, Precision=0.003, Recall=0.455
+  Epoch 7: Val Acc=0.730, F1=0.005, AUC=0.518, Precision=0.003, Recall=0.182
+  Epoch 8: Val Acc=0.983, F1=0.000, AUC=0.464, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.724, F1=0.006, AUC=0.440, Precision=0.003, Recall=0.227
+  Epoch 10: Val Acc=0.960, F1=0.009, AUC=0.469, Precision=0.005, Recall=0.045
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold4.pt
+
+--- Fold 5/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.992, F1=0.000, AUC=0.344, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.984, F1=0.000, AUC=0.480, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.987, F1=0.000, AUC=0.408, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.989, F1=0.000, AUC=0.466, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.304, F1=0.011, AUC=0.529, Precision=0.006, Recall=0.759
+  Epoch 6: Val Acc=0.173, F1=0.011, AUC=0.499, Precision=0.005, Recall=0.862
+  Epoch 7: Val Acc=0.352, F1=0.012, AUC=0.567, Precision=0.006, Recall=0.759
+  Epoch 8: Val Acc=0.246, F1=0.011, AUC=0.560, Precision=0.005, Recall=0.793
+  Epoch 9: Val Acc=0.994, F1=0.000, AUC=0.533, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.978, F1=0.016, AUC=0.489, Precision=0.011, Recall=0.034
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold5.pt
+
+==== Cross-Validation Summary ====
+AUCs: [np.float64(0.5293926729503824), np.float64(0.5403523854697814), np.float64(0.6011168232582875), np.float64(0.5177944397912506), np.float64(0.5673950457926117)]
+Mean AUC: 0.5512

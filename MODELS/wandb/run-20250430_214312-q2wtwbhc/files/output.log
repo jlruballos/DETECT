@@ -1,0 +1,13 @@
+Loading sequences from: /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/lstm_sequences_vae.npz
+
+--- Fold 1/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+Traceback (most recent call last):
+  File "/mnt/d/DETECT/MODELS/LSTM.py", line 166, in <module>
+    run_lstm_cv(
+  File "/mnt/d/DETECT/MODELS/LSTM.py", line 149, in run_lstm_cv
+    best_model_state, best_auc = train_one_fold(model, train_loader, val_loader, epochs, device, fold + 1)
+  File "/mnt/d/DETECT/MODELS/LSTM.py", line 86, in train_one_fold
+    precision = precision_score(val_labels, val_preds_binary)
+NameError: name 'precision_score' is not defined

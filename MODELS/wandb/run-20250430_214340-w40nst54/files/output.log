@@ -1,0 +1,100 @@
+Loading sequences from: /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/lstm_sequences_vae.npz
+
+--- Fold 1/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.791, F1=0.003, AUC=0.474, Precision=0.002, Recall=0.100
+  Epoch 2: Val Acc=0.528, F1=0.007, AUC=0.520, Precision=0.003, Recall=0.450
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 3: Val Acc=0.996, F1=0.000, AUC=0.532, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.195, F1=0.006, AUC=0.462, Precision=0.003, Recall=0.700
+  Epoch 5: Val Acc=0.929, F1=0.010, AUC=0.487, Precision=0.005, Recall=0.100
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 6: Val Acc=0.996, F1=0.000, AUC=0.501, Precision=0.000, Recall=0.000
+  Epoch 7: Val Acc=0.831, F1=0.008, AUC=0.480, Precision=0.004, Recall=0.200
+  Epoch 8: Val Acc=0.484, F1=0.007, AUC=0.528, Precision=0.003, Recall=0.500
+  Epoch 9: Val Acc=0.067, F1=0.008, AUC=0.487, Precision=0.004, Recall=1.000
+  Epoch 10: Val Acc=0.968, F1=0.000, AUC=0.475, Precision=0.000, Recall=0.000
+  ✅ Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold1.pt
+
+--- Fold 2/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 1: Val Acc=0.997, F1=0.000, AUC=0.532, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.952, F1=0.000, AUC=0.464, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.984, F1=0.000, AUC=0.513, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.997, F1=0.000, AUC=0.581, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.991, F1=0.000, AUC=0.608, Precision=0.000, Recall=0.000
+  Epoch 6: Val Acc=0.993, F1=0.000, AUC=0.577, Precision=0.000, Recall=0.000
+  Epoch 7: Val Acc=0.997, F1=0.000, AUC=0.626, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 8: Val Acc=0.997, F1=0.000, AUC=0.452, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.996, F1=0.000, AUC=0.616, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.955, F1=0.008, AUC=0.388, Precision=0.004, Recall=0.056
+  ✅ Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold2.pt
+
+--- Fold 3/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.955, F1=0.008, AUC=0.454, Precision=0.004, Recall=0.067
+  Epoch 2: Val Acc=0.997, F1=0.000, AUC=0.550, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 3: Val Acc=0.997, F1=0.000, AUC=0.524, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 4: Val Acc=0.997, F1=0.000, AUC=0.573, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.185, F1=0.006, AUC=0.551, Precision=0.003, Recall=0.933
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 6: Val Acc=0.997, F1=0.000, AUC=0.523, Precision=0.000, Recall=0.000
+  Epoch 7: Val Acc=0.040, F1=0.005, AUC=0.640, Precision=0.003, Recall=0.933
+  Epoch 8: Val Acc=0.055, F1=0.005, AUC=0.570, Precision=0.003, Recall=0.933
+  Epoch 9: Val Acc=0.098, F1=0.005, AUC=0.466, Precision=0.003, Recall=0.867
+  Epoch 10: Val Acc=0.053, F1=0.005, AUC=0.543, Precision=0.003, Recall=0.933
+  ✅ Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold3.pt
+
+--- Fold 4/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+  Epoch 1: Val Acc=0.993, F1=0.000, AUC=0.551, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.958, F1=0.000, AUC=0.561, Precision=0.000, Recall=0.000
+  Epoch 3: Val Acc=0.993, F1=0.000, AUC=0.387, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.162, F1=0.007, AUC=0.456, Precision=0.004, Recall=0.773
+  Epoch 5: Val Acc=0.990, F1=0.000, AUC=0.443, Precision=0.000, Recall=0.000
+  Epoch 6: Val Acc=0.799, F1=0.004, AUC=0.403, Precision=0.002, Recall=0.091
+  Epoch 7: Val Acc=0.954, F1=0.008, AUC=0.401, Precision=0.004, Recall=0.045
+  Epoch 8: Val Acc=0.353, F1=0.005, AUC=0.405, Precision=0.003, Recall=0.455
+  Epoch 9: Val Acc=0.986, F1=0.000, AUC=0.396, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.968, F1=0.011, AUC=0.400, Precision=0.006, Recall=0.045
+  ✅ Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold4.pt
+
+--- Fold 5/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/torch/nn/modules/rnn.py:123: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+  warnings.warn(
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 1: Val Acc=0.995, F1=0.000, AUC=0.493, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.410, F1=0.010, AUC=0.529, Precision=0.005, Recall=0.586
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 3: Val Acc=0.995, F1=0.000, AUC=0.498, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.995, F1=0.000, AUC=0.514, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.409, F1=0.012, AUC=0.519, Precision=0.006, Recall=0.690
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 6: Val Acc=0.995, F1=0.000, AUC=0.447, Precision=0.000, Recall=0.000
+  Epoch 7: Val Acc=0.995, F1=0.000, AUC=0.491, Precision=0.000, Recall=0.000
+  Epoch 8: Val Acc=0.994, F1=0.000, AUC=0.554, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.572, F1=0.012, AUC=0.540, Precision=0.006, Recall=0.517
+  Epoch 10: Val Acc=0.994, F1=0.000, AUC=0.540, Precision=0.000, Recall=0.000
+  ✅ Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold5.pt
+
+==== Cross-Validation Summary ====
+AUCs: [np.float64(0.531855770940779), np.float64(0.625810308707854), np.float64(0.6395142705194115), np.float64(0.5614006829456865), np.float64(0.5538447353863175)]
+Mean AUC: 0.5825

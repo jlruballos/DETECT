@@ -1,0 +1,54 @@
+Main Concepts from FIMD about Longitudinal Data Imputation:
+
+- Longitudinal data has a natural time structure: repeated measures from the same subject over time.
+
+- Simple imputation methods (e.g., mean, median) are inappropriate because they ignore the time-dependency of measurements.
+
+- LOCF (Last Observation Carried Forward) and NOCB (Next Observation Carried Backward) can be used for short gaps but are generally crude solutions.
+
+- Linear interpolation and spline interpolation are preferred for longitudinal data because they respect the continuous and gradual nature of changes over time.
+
+- Multivariate Imputation by Chained Equations (MICE) can be used, but it must respect clustering by subject ID:
+  - Ideally, imputation should be done separately within each subject.
+  - Alternatively, subject ID should be included as a predictor in the imputation model.
+
+- Advanced methods like mixed models or time-series-specific models (e.g., random slopes) can better account for individual trajectories, but are more complex to implement.
+
+- General Recommendation:
+  - For smooth biological processes (e.g., gait speed, steps), linear or spline interpolation is preferred.
+  - For more flexible, model-driven filling, MICE is appropriate if applied carefully with awareness of subjects' grouping.
+
+Multivariate vs Univariate MICE Imputation Design
+
+We updated the impute_missing_data() function to allow flexible use of MICE (Multivariate Imputation by Chained Equations).
+
+New behavior:
+- If multivariate=True:
+  - MICE imputes all selected features together.
+  - The imputation uses information across columns (e.g., gait speed, steps).
+  - This improves accuracy by capturing relationships between features.
+- If multivariate=False:
+  - MICE imputes each column separately.
+  - Useful when features should be imputed independently.
+
+The multivariate option gives users the flexibility to control how imputations are performed depending on the data and experimental needs.
+
+Example Usage:
+- Multivariate MICE: impute_missing_data(daily_df, columns=[...], method='mice', multivariate=True)
+- Univariate MICE: impute_missing_data(daily_df, columns=[...], method='mice', multivariate=False)
+
+This design allows the imputation system to be easily adapted for different strategies while keeping the function clean and modular.
+
+Based on "VAEs in the Presence of Missing Data," we identified several imputation strategies tailored for structured or longitudinal datasets:
+
+1. Model missingness as a corruption process rather than a latent variable (x̃ = m ⋅ x + (1−m) ⋅ μ or 0).
+2. Use a conditional VAE where both encoder and decoder are aware of the missingness mask.
+3. This framework supports MCAR, MAR, and MNAR data — which is critical for real-world longitudinal sensor data.
+4. Recommended configurations include:
+   - ED Ind. (Encoder + Decoder aware of missingness)
+   - Corruption-based VAE training with access to the mask during inference.
+5. These approaches outperform zero-imputation or simple masking, particularly when missingness is structured or related to outcomes (MNAR).
+
+Added mask-aware features to the model input to indicate which values were originally missing and imputed. These binary features (0 = observed, 1 = imputed) 
+are used as auxiliary signals during modeling, helping the LSTM learn to handle uncertain or less reliable inputs. 
+This method improves model robustness and aligns with best practices in modeling longitudinal data with irregular missingness.

@@ -1,0 +1,4 @@
+Multiple imputation creates multiple complete versions of the dataset by filling missing values differently each time.
+Each imputed dataset represents a plausible scenario for the missing data. Models are trained separately on each imputed dataset,
+and results are combined, allowing for proper handling of uncertainty caused by missingness. 
+This leads to more honest, statistically valid conclusions compared to single imputation.

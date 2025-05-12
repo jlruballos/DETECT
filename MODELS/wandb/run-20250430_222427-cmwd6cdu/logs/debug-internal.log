@@ -1,0 +1,16 @@
+{"time":"2025-04-30T22:24:27.91624753-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/mnt/d/DETECT/MODELS/wandb/run-20250430_222427-cmwd6cdu/logs/debug-core.log"}
+{"time":"2025-04-30T22:24:28.67073903-07:00","level":"INFO","msg":"created new stream","id":"cmwd6cdu"}
+{"time":"2025-04-30T22:24:28.671060729-07:00","level":"INFO","msg":"stream: started","id":"cmwd6cdu"}
+{"time":"2025-04-30T22:24:28.671333984-07:00","level":"INFO","msg":"sender: started","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:24:28.671115779-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:24:28.671166946-07:00","level":"INFO","msg":"handler: started","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:24:28.843079117-07:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-04-30T22:25:39.327015602-07:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-04-30T22:25:39.328358803-07:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-04-30T22:25:40.023933482-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-04-30T22:25:40.278723387-07:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading history steps 42-49, summary, console lines 67-79","runtime_seconds":0.254187883}],"total_operations":1}}
+{"time":"2025-04-30T22:25:40.367490485-07:00","level":"INFO","msg":"stream: closing","id":"cmwd6cdu"}
+{"time":"2025-04-30T22:25:40.367837179-07:00","level":"INFO","msg":"handler: closed","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:25:40.367871902-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:25:40.367893339-07:00","level":"INFO","msg":"sender: closed","stream_id":"cmwd6cdu"}
+{"time":"2025-04-30T22:25:40.369524877-07:00","level":"INFO","msg":"stream: closed","id":"cmwd6cdu"}

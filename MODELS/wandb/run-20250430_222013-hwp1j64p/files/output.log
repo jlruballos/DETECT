@@ -1,0 +1,98 @@
+Loading sequences from: /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/lstm_sequences_vae.npz
+
+--- Fold 1/5 ---
+  Epoch 1: Val Acc=0.004, F1=0.007, AUC=0.426, Precision=0.004, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 2: Val Acc=0.996, F1=0.000, AUC=0.454, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 3: Val Acc=0.996, F1=0.000, AUC=0.530, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.004, F1=0.007, AUC=0.420, Precision=0.004, Recall=1.000
+  Epoch 5: Val Acc=0.004, F1=0.007, AUC=0.401, Precision=0.004, Recall=1.000
+  Epoch 6: Val Acc=0.996, F1=0.000, AUC=0.445, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 7: Val Acc=0.996, F1=0.000, AUC=0.456, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 8: Val Acc=0.996, F1=0.000, AUC=0.485, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 9: Val Acc=0.996, F1=0.000, AUC=0.422, Precision=0.000, Recall=0.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 10: Val Acc=0.996, F1=0.000, AUC=0.347, Precision=0.000, Recall=0.000
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold1.pt
+
+--- Fold 2/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 1: Val Acc=0.997, F1=0.000, AUC=0.549, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.007, F1=0.006, AUC=0.512, Precision=0.003, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 3: Val Acc=0.997, F1=0.000, AUC=0.437, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.003, F1=0.006, AUC=0.552, Precision=0.003, Recall=1.000
+  Epoch 5: Val Acc=0.058, F1=0.006, AUC=0.535, Precision=0.003, Recall=0.944
+  Epoch 6: Val Acc=0.090, F1=0.006, AUC=0.487, Precision=0.003, Recall=0.889
+  Epoch 7: Val Acc=0.003, F1=0.006, AUC=0.556, Precision=0.003, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 8: Val Acc=0.997, F1=0.000, AUC=0.497, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.003, F1=0.006, AUC=0.562, Precision=0.003, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 10: Val Acc=0.997, F1=0.000, AUC=0.546, Precision=0.000, Recall=0.000
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold2.pt
+
+--- Fold 3/5 ---
+  Epoch 1: Val Acc=0.003, F1=0.005, AUC=0.470, Precision=0.003, Recall=1.000
+  Epoch 2: Val Acc=0.003, F1=0.005, AUC=0.464, Precision=0.003, Recall=1.000
+  Epoch 3: Val Acc=0.003, F1=0.005, AUC=0.524, Precision=0.003, Recall=1.000
+  Epoch 4: Val Acc=0.692, F1=0.005, AUC=0.489, Precision=0.002, Recall=0.267
+  Epoch 5: Val Acc=0.634, F1=0.002, AUC=0.429, Precision=0.001, Recall=0.133
+  Epoch 6: Val Acc=0.132, F1=0.006, AUC=0.550, Precision=0.003, Recall=1.000
+  Epoch 7: Val Acc=0.577, F1=0.005, AUC=0.477, Precision=0.003, Recall=0.400
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 8: Val Acc=0.997, F1=0.000, AUC=0.436, Precision=0.000, Recall=0.000
+  Epoch 9: Val Acc=0.003, F1=0.005, AUC=0.500, Precision=0.003, Recall=1.000
+  Epoch 10: Val Acc=0.995, F1=0.000, AUC=0.539, Precision=0.000, Recall=0.000
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold3.pt
+
+--- Fold 4/5 ---
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 1: Val Acc=0.996, F1=0.000, AUC=0.548, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.947, F1=0.007, AUC=0.496, Precision=0.004, Recall=0.045
+  Epoch 3: Val Acc=0.004, F1=0.008, AUC=0.546, Precision=0.004, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 4: Val Acc=0.996, F1=0.000, AUC=0.511, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.105, F1=0.008, AUC=0.498, Precision=0.004, Recall=0.909
+  Epoch 6: Val Acc=0.004, F1=0.008, AUC=0.523, Precision=0.004, Recall=1.000
+  Epoch 7: Val Acc=0.996, F1=0.000, AUC=0.519, Precision=0.000, Recall=0.000
+  Epoch 8: Val Acc=0.004, F1=0.008, AUC=0.467, Precision=0.004, Recall=1.000
+  Epoch 9: Val Acc=0.987, F1=0.000, AUC=0.488, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.972, F1=0.013, AUC=0.496, Precision=0.007, Recall=0.045
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold4.pt
+
+--- Fold 5/5 ---
+  Epoch 1: Val Acc=0.985, F1=0.000, AUC=0.478, Precision=0.000, Recall=0.000
+  Epoch 2: Val Acc=0.130, F1=0.010, AUC=0.457, Precision=0.005, Recall=0.897
+  Epoch 3: Val Acc=0.995, F1=0.000, AUC=0.525, Precision=0.000, Recall=0.000
+  Epoch 4: Val Acc=0.987, F1=0.000, AUC=0.514, Precision=0.000, Recall=0.000
+  Epoch 5: Val Acc=0.005, F1=0.010, AUC=0.522, Precision=0.005, Recall=1.000
+  Epoch 6: Val Acc=0.005, F1=0.010, AUC=0.482, Precision=0.005, Recall=1.000
+/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+  Epoch 7: Val Acc=0.995, F1=0.000, AUC=0.527, Precision=0.000, Recall=0.000
+  Epoch 8: Val Acc=0.005, F1=0.010, AUC=0.450, Precision=0.005, Recall=1.000
+  Epoch 9: Val Acc=0.984, F1=0.000, AUC=0.511, Precision=0.000, Recall=0.000
+  Epoch 10: Val Acc=0.976, F1=0.015, AUC=0.562, Precision=0.009, Recall=0.034
+Saved best model to /mnt/d/DETECT/OUTPUT/generate_lstm_sequences/models/lstm_fold5.pt
+
+==== Cross-Validation Summary ====
+AUCs: [np.float64(0.5301707273697315), np.float64(0.562057788845409), np.float64(0.5503634107427762), np.float64(0.5482169318987179), np.float64(0.5620443788800787)]
+Mean AUC: 0.5506
