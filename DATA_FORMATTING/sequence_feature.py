@@ -64,7 +64,7 @@ from vae_imputer import impute_subject_data
 
 
 program_name = 'sequence_feature'
-imputation_method = 'knn'  # Method for filling missing values
+imputation_method = 'vae'  # Method for filling missing values
 # VAE variant for imputation — choose one of the following:
 # 'Zero Imputation': Basic VAE, missing values are replaced with zeros. Mask is not used.
 # 'Encoder Mask': Adds the missingness mask as input to the encoder (but not the decoder). Helps the model learn which parts are observed.
@@ -132,8 +132,18 @@ gait_df = gait_df.groupby(['subid', 'date'])['gait_speed'].mean().reset_index()
 # Preprocess steps data to align with daily format
 steps_df = preprocess_steps(steps_df)
 
+# Ensure date columns are datetime
+falls_df['fall1_date'] = pd.to_datetime(falls_df['fall1_date'], errors='coerce')
+falls_df['start_date'] = pd.to_datetime(falls_df['StartDate'], errors='coerce')
+
+# Fill missing fall1_date with (survey_date - 1 day) if fall == 1
+falls_df['cutoff_dates'] = falls_df.apply(
+    lambda row: row['fall1_date'].date() if pd.notnull(row['fall1_date']) 
+    else ((row['start_date'] - pd.Timedelta(days=1)).date() if row['FALL'] == 1 else pd.NaT),
+    axis=1
+)
 # Process fall and hospital event dates
-falls_df['cutoff_dates'] = pd.to_datetime(falls_df['fall1_date']).dt.date
+#falls_df['cutoff_dates'] = pd.to_datetime(falls_df['fall1_date']).dt.date
 falls_df['hospital_visit'] = pd.to_datetime(falls_df['hcru1_date']).dt.date
 
 # -------- FEATURE ENGINEERING --------
@@ -174,6 +184,19 @@ for subid in subject_ids:
     daily_df = daily_df.sort_values('date')
     
     original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
+    
+    #---Compute % missing per festure before imputation
+    total_days = len(original_daily_df)
+    missing_pct_columns = {}
+    
+    for feat in FEATURES+EMFIT_FEATURES:
+        missing_count = original_daily_df[feat].isna().sum()
+        missing_pct = round((missing_count / total_days) * 100, 2) if total_days > 0 else np.nan
+        missing_pct_columns[f"{feat}_missing_pct"] = missing_pct
+        
+    #repeat missing % per features across all rows
+    for col_name, value in missing_pct_columns.items():
+        daily_df[col_name] = value 
     
     #count missing values before imputation
     #missing_before = daily_df[['gait_speed', 'daily_steps']].isna().sum()

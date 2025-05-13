@@ -24,7 +24,7 @@ else:
     base_path = r'D:\DETECT'
 
 sys.path.append(os.path.join(base_path, 'HELPERS'))
-from helpers import preprocess_steps, remove_outliers, proc_emfit_data
+from helpers import preprocess_steps, remove_outliers, proc_emfit_data, label_exact_day
 
 output_path = os.path.join(base_path, 'OUTPUT', 'raw_export_for_r')
 os.makedirs(output_path, exist_ok=True)
@@ -35,6 +35,7 @@ STEPS_PATH = os.path.join(base_path, 'DETECT_Data', 'Watch_Data', 'Daily_Steps',
 MAPPING_PATH = os.path.join(base_path, 'DETECT_Data', '_CONTEXT_FILES', 'Study_Home-Subject_Dates_2024-12-16', 'homeids_subids_NYCE.csv')
 EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
 CLINICAL_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'DETECT-AD_Enrolled_Amyloid Status_PET_SUVR_QUEST_CENTILOID_20250116.xlsx')
+FALLS_PATH = os.path.join(base_path, 'DETECT_Data', 'HUF', 'kaye_365_huf_detect.csv')
 
 # -------- FEATURES --------
 FEATURES = ['steps', 'gait_speed']
@@ -53,11 +54,21 @@ steps_df = pd.read_csv(STEPS_PATH)
 mapping_df = pd.read_csv(MAPPING_PATH)
 emfit_df = pd.read_csv(EMFIT_PATH)
 clinical_df = pd.read_excel(CLINICAL_PATH)
+falls_df = pd.read_csv(FALLS_PATH)
 
 emfit_df = proc_emfit_data(emfit_df)
 
 gait_df['gait_speed'] = gait_df['gait_speed'].mask(gait_df['gait_speed'] < 0, np.nan)
 steps_df['steps'] = steps_df['steps'].mask(steps_df['steps'] < 0, np.nan)
+
+falls_df['fall1_date'] = pd.to_datetime(falls_df['fall1_date'], errors='coerce')
+falls_df['start_date'] = pd.to_datetime(falls_df['StartDate'], errors='coerce')
+falls_df['cutoff_dates'] = falls_df.apply(
+    lambda row: row['fall1_date'].date() if pd.notnull(row['fall1_date']) 
+    else ((row['start_date'] - pd.Timedelta(days=1)).date() if row['FALL'] == 1 else pd.NaT),
+    axis=1
+)
+falls_df['hospital_visit'] = pd.to_datetime(falls_df['hcru1_date'], errors='coerce').dt.date
 
 # -------- MERGE AND ALIGN SUBJECTS --------
 mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
@@ -78,6 +89,9 @@ for subid in subject_ids:
     gait_sub = gait_df[gait_df['subid'] == subid].copy()
     steps_sub = steps_df[steps_df['subid'] == subid].copy()
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
+    subject_falls = falls_df[falls_df['subid'] == subid]  # assumes subid is in falls_df
+    fall_dates = sorted(subject_falls['cutoff_dates'].dropna().tolist())
+    hospital_dates = sorted(subject_falls['hospital_visit'].dropna().tolist())
 
     gait_sub = remove_outliers(gait_sub, 'gait_speed')
     steps_sub = remove_outliers(steps_sub, 'steps')
@@ -90,6 +104,12 @@ for subid in subject_ids:
     emfit_sub['date'] = pd.to_datetime(emfit_sub['date']).dt.date
     daily_df = pd.merge(daily_df, emfit_sub[['date'] + EMFIT_FEATURES], on='date', how='outer')
     daily_df = daily_df.sort_values('date')
+    # Add binary event labels
+    daily_df['label_fall'] = daily_df['date'].apply(lambda d: label_exact_day(d, fall_dates))
+    daily_df['label_hospital'] = daily_df['date'].apply(lambda d: label_exact_day(d, hospital_dates))
+
+    daily_df['label'] = daily_df[['label_fall', 'label_hospital']].max(axis=1)
+
     daily_df['subid'] = subid
 
     all_subject_data.append(daily_df)

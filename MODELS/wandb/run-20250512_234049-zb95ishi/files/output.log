@@ -1,0 +1,13 @@
+No overlap between train and test sets.
+/mnt/d/DETECT/MODELS/xg_boost.py:126: UserWarning: wandb_callback will be deprecated in favor of WandbCallback. Please use WandbCallback for more features.
+  callbacks=[wandb_callback()]
+Traceback (most recent call last):
+  File "/mnt/d/DETECT/MODELS/xg_boost.py", line 121, in <module>
+    bst = xgb.train(
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/core.py", line 729, in inner_f
+    return func(**kwargs)
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/training.py", line 174, in train
+    cb_container = CallbackContainer(
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/callback.py", line 165, in __init__
+    raise TypeError("callback must be an instance of `TrainingCallback`.")
+TypeError: callback must be an instance of `TrainingCallback`.

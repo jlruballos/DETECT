@@ -374,3 +374,18 @@ def proc_emfit_data(df):
 	df['waso'] = df['waso'] / 60  # to minutes
  
 	return df
+
+def add_future_event_window_labels(df, subid_col='subid', date_col='date', event_cols=['label_fall'], horizons=[7]):
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+    df = df.sort_values([subid_col, date_col]).reset_index(drop=True)
+
+    for event in event_cols:
+        for h in horizons:
+            future_col = f"{event}_within{h}"
+            df[future_col] = (
+                df.groupby(subid_col)[event]
+                .transform(lambda x: x.rolling(window=h, min_periods=1).max().shift(-h + 1).fillna(0))
+                .astype(int)
+            )
+    return df
