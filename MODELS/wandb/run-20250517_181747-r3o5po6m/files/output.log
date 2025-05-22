@@ -1,0 +1,2 @@
+Metrics: {'accuracy': 0.9787200994097546, 'precision': 1.0, 'recall': 0.16463414634146342, 'f1': 0.28272251308900526, 'roc_auc': np.float64(0.5773256305542813)}
+Saved predictions to: /mnt/d/DETECT/OUTPUT/rf/random_forest_predictions_ffill_20250517_181746.csv

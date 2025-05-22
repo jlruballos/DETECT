@@ -1,0 +1,289 @@
+_wandb:
+    value:
+        cli_version: 0.19.10
+        m:
+            - "1": eval-logloss
+              "6":
+                - 3
+              "7":
+                - 1
+            - "1": eval-auc
+              "6":
+                - 3
+              "7":
+                - 2
+            - "1": train-logloss
+              "6":
+                - 3
+              "7":
+                - 1
+            - "1": train-auc
+              "6":
+                - 3
+              "7":
+                - 2
+        python_version: 3.10.16
+        t:
+            "1":
+                - 5
+                - 6
+                - 53
+                - 55
+            "2":
+                - 5
+                - 6
+                - 53
+                - 55
+            "3":
+                - 2
+                - 7
+                - 13
+                - 16
+                - 23
+                - 31
+                - 55
+                - 63
+            "4": 3.10.16
+            "5": 0.19.10
+            "8":
+                - 5
+            "12": 0.19.10
+            "13": linux-x86_64
+        visualize:
+            Feature Importance:
+                panel_config:
+                    fieldSettings:
+                        label: Feature
+                        value: Importance
+                    panelDefId: wandb/bar/v0
+                    stringSettings:
+                        title: Feature Importance
+                    transform:
+                        name: tableWithLeafColNames
+                    userQuery:
+                        queryFields:
+                            - args:
+                                - name: runSets
+                                  value: ${runSets}
+                              fields:
+                                - fields: []
+                                  name: id
+                                - fields: []
+                                  name: name
+                                - fields: []
+                                  name: _defaultColorIndex
+                                - args:
+                                    - name: tableKey
+                                      value: Feature Importance_table
+                                  fields: []
+                                  name: summaryTable
+                              name: runSets
+                panel_type: Vega2
+features:
+    value:
+        - gait_speed
+        - steps
+        - awakenings
+        - bedexitcount
+        - end_sleep_time
+        - inbed_time
+        - outbed_time
+        - sleepscore
+        - durationinsleep
+        - durationawake
+        - waso
+        - hrvscore
+        - start_sleep_time
+        - time_to_sleep
+        - time_in_bed_after_sleep
+        - total_time_in_bed
+        - tossnturncount
+        - sleep_period
+        - minhr
+        - maxhr
+        - avghr
+        - avgrr
+        - maxrr
+        - minrr
+        - steps_norm
+        - steps_delta
+        - steps_delta_1d
+        - steps_ma_7
+        - gait_speed_norm
+        - gait_speed_delta
+        - gait_speed_delta_1d
+        - gait_speed_ma_7
+        - awakenings_norm
+        - awakenings_delta
+        - awakenings_delta_1d
+        - awakenings_ma_7
+        - bedexitcount_norm
+        - bedexitcount_delta
+        - bedexitcount_delta_1d
+        - bedexitcount_ma_7
+        - end_sleep_time_norm
+        - end_sleep_time_delta
+        - end_sleep_time_delta_1d
+        - end_sleep_time_ma_7
+        - inbed_time_norm
+        - inbed_time_delta
+        - inbed_time_delta_1d
+        - inbed_time_ma_7
+        - outbed_time_norm
+        - outbed_time_delta
+        - outbed_time_delta_1d
+        - outbed_time_ma_7
+        - sleepscore_norm
+        - sleepscore_delta
+        - sleepscore_delta_1d
+        - sleepscore_ma_7
+        - durationinsleep_norm
+        - durationinsleep_delta
+        - durationinsleep_delta_1d
+        - durationinsleep_ma_7
+        - durationawake_norm
+        - durationawake_delta
+        - durationawake_delta_1d
+        - durationawake_ma_7
+        - waso_norm
+        - waso_delta
+        - waso_delta_1d
+        - waso_ma_7
+        - hrvscore_norm
+        - hrvscore_delta
+        - hrvscore_delta_1d
+        - hrvscore_ma_7
+        - start_sleep_time_norm
+        - start_sleep_time_delta
+        - start_sleep_time_delta_1d
+        - start_sleep_time_ma_7
+        - time_to_sleep_norm
+        - time_to_sleep_delta
+        - time_to_sleep_delta_1d
+        - time_to_sleep_ma_7
+        - time_in_bed_after_sleep_norm
+        - time_in_bed_after_sleep_delta
+        - time_in_bed_after_sleep_delta_1d
+        - time_in_bed_after_sleep_ma_7
+        - total_time_in_bed_norm
+        - total_time_in_bed_delta
+        - total_time_in_bed_delta_1d
+        - total_time_in_bed_ma_7
+        - tossnturncount_norm
+        - tossnturncount_delta
+        - tossnturncount_delta_1d
+        - tossnturncount_ma_7
+        - sleep_period_norm
+        - sleep_period_delta
+        - sleep_period_delta_1d
+        - sleep_period_ma_7
+        - minhr_norm
+        - minhr_delta
+        - minhr_delta_1d
+        - minhr_ma_7
+        - maxhr_norm
+        - maxhr_delta
+        - maxhr_delta_1d
+        - maxhr_ma_7
+        - avghr_norm
+        - avghr_delta
+        - avghr_delta_1d
+        - avghr_ma_7
+        - avgrr_norm
+        - avgrr_delta
+        - avgrr_delta_1d
+        - avgrr_ma_7
+        - maxrr_norm
+        - maxrr_delta
+        - maxrr_delta_1d
+        - maxrr_ma_7
+        - minrr_norm
+        - minrr_delta
+        - minrr_delta_1d
+        - minrr_ma_7
+        - days_since_fall
+imputer:
+    value: vae
+label_shift_days:
+    value: 7
+learner:
+    value:
+        generic_param:
+            device: cpu
+            fail_on_invalid_gpu_id: "0"
+            n_jobs: "0"
+            nthread: "0"
+            random_state: "0"
+            seed: "0"
+            seed_per_iteration: "0"
+            validate_parameters: "1"
+        gradient_booster:
+            gbtree_model_param:
+                num_parallel_tree: "1"
+                num_trees: "0"
+            gbtree_train_param:
+                process_type: default
+                tree_method: auto
+                updater: grow_quantile_histmaker
+                updater_seq: grow_quantile_histmaker
+            name: gbtree
+            specified_updater: false
+            tree_train_param:
+                alpha: "0"
+                cache_opt: "1"
+                colsample_bylevel: "1"
+                colsample_bynode: "1"
+                colsample_bytree: "1"
+                eta: "0.300000012"
+                gamma: "0"
+                grow_policy: depthwise
+                interaction_constraints: ""
+                lambda: "1"
+                learning_rate: "0.300000012"
+                max_bin: "256"
+                max_cat_threshold: "64"
+                max_cat_to_onehot: "4"
+                max_delta_step: "0"
+                max_depth: "6"
+                max_leaves: "0"
+                min_child_weight: "1"
+                min_split_loss: "0"
+                monotone_constraints: ()
+                refresh_leaf: "1"
+                reg_alpha: "0"
+                reg_lambda: "1"
+                sampling_method: uniform
+                sketch_ratio: "2"
+                sparse_threshold: "0.20000000000000001"
+                subsample: "1"
+            updater:
+                - hist_train_param:
+                    debug_synchronize: "0"
+                    extmem_single_page: "0"
+                    max_cached_hist_node: "18446744073709551615"
+                  name: grow_quantile_histmaker
+        learner_model_param:
+            base_score: "5E-1"
+            boost_from_average: "1"
+            num_class: "0"
+            num_feature: "121"
+            num_target: "1"
+        learner_train_param:
+            booster: gbtree
+            disable_default_eval_metric: "0"
+            multi_strategy: one_output_per_tree
+            objective: binary:logistic
+        metrics:
+            - name: logloss
+            - name: auc
+        objective:
+            name: binary:logistic
+            reg_loss_param:
+                scale_pos_weight: "1"
+model:
+    value: XGboost
+version:
+    value:
+        - 3
+        - 0
+        - 0

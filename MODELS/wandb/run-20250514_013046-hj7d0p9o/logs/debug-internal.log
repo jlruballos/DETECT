@@ -1,0 +1,16 @@
+{"time":"2025-05-14T01:30:46.454555626-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/mnt/d/DETECT/MODELS/wandb/run-20250514_013046-hj7d0p9o/logs/debug-core.log"}
+{"time":"2025-05-14T01:30:47.151349345-07:00","level":"INFO","msg":"created new stream","id":"hj7d0p9o"}
+{"time":"2025-05-14T01:30:47.151797075-07:00","level":"INFO","msg":"stream: started","id":"hj7d0p9o"}
+{"time":"2025-05-14T01:30:47.151818117-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:30:47.151862732-07:00","level":"INFO","msg":"handler: started","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:30:47.151870009-07:00","level":"INFO","msg":"sender: started","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:30:47.480922503-07:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-14T01:31:12.978486393-07:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-14T01:31:12.978777152-07:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-14T01:31:13.521939437-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-14T01:31:13.822641246-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-05-14T01:31:13.829613754-07:00","level":"INFO","msg":"stream: closing","id":"hj7d0p9o"}
+{"time":"2025-05-14T01:31:13.829978592-07:00","level":"INFO","msg":"handler: closed","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:31:13.830004014-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:31:13.830117824-07:00","level":"INFO","msg":"sender: closed","stream_id":"hj7d0p9o"}
+{"time":"2025-05-14T01:31:13.83258159-07:00","level":"INFO","msg":"stream: closed","id":"hj7d0p9o"}

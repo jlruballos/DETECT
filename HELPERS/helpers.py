@@ -59,6 +59,7 @@ def impute_missing_data(df, columns=None, method='linear', multivariate=False):
     - method: str, one of ['linear', 'mean', 'median', 'ffill', 'bfill']
     
 		- 'linear': Linear interpolation
+		- 'nearest': Nearest neighbor interpolation
 		- 'mean': Fill with mean value of the column
 		- 'median': Fill with median value of the column
 		- 'ffill': Forward fill (propagate last valid observation forward)
@@ -82,6 +83,8 @@ def impute_missing_data(df, columns=None, method='linear', multivariate=False):
     for col in columns:
         if method == 'linear':
             df[col] = df[col].interpolate(method='linear')
+        elif method == 'nearest':
+            df[col] = df[col].interpolate(method='nearest', limit_direction='both') 
         elif method == 'mean':
             mean_value = df[col].mean()
             df[col] = df[col].fillna(mean_value)
@@ -96,8 +99,21 @@ def impute_missing_data(df, columns=None, method='linear', multivariate=False):
             df[col] = df[col].interpolate(method='polynomial', order=2)
         elif method == 'knn':
             from sklearn.impute import KNNImputer
-            imputer = KNNImputer(n_neighbors=2) #adjust n_neighbors as needed
-            df[[col]] = imputer.fit_transform(df[[col]])
+            imputer = KNNImputer(n_neighbors=3)
+            
+            for col in columns:
+                if df[col].dropna().empty:
+                    print(f"[SKIP] KNN imputation skipped for '{col}' — column is all NaN.")
+                    continue
+
+				# Fit and transform single-column DataFrame
+                imputed_col = imputer.fit_transform(df[[col]])
+
+				# Safely assign result if lengths match
+                if imputed_col.shape[0] == df.shape[0]:
+                    df[col] = imputed_col[:, 0]
+                else:
+                    print(f"[ERROR] KNN imputer returned unexpected shape for '{col}'. Skipping.")
         elif method == 'spline':
             df[col] = df[col].interpolate(method='spline', order=2)
         elif method == 'random':
@@ -329,17 +345,39 @@ def get_cv_splits(X, y, subid=None, method='groupkfold', n_splits=5):
     
 # Function to remove outliers using IQR method
 def remove_outliers(df, column_name):
-    Q1 = df[column_name].quantile(0.05)
-    Q3 = df[column_name].quantile(0.95)
+    col = df[column_name]
+
+    # Skip if column is all NaN or empty
+    if col.dropna().empty:
+        print(f"[SKIP] '{column_name}' is all NaN or empty — skipping outlier removal.")
+        return df
+
+    Q1 = col.quantile(0.05)
+    Q3 = col.quantile(0.95)
     IQR = Q3 - Q1
+
+    # Skip if IQR is 0 or NaN (no variation)
+    if pd.isna(IQR) or IQR == 0:
+        print(f"[SKIP] '{column_name}' has invalid IQR — skipping outlier removal.")
+        return df
+
     lower_bound = Q1 - 1.5 * IQR
     upper_bound = Q3 + 1.5 * IQR
-    
+
+    # Filter
+    filtered_df = df[(col >= lower_bound) & (col <= upper_bound)]
+
+    # Skip if fewer than 5 points would remain
+    if filtered_df.shape[0] < 5:
+        print(f"[WARN] Too few data points after outlier removal for '{column_name}' — skipping.")
+        return df
+
+    # Otherwise, print and return filtered data
     print(f"Outlier removal for {column_name}:")
-    print(f"Lower bound: {lower_bound}, Upper bound: {upper_bound}")
-    print(f"Original size: {len(df)}, Size after outlier removal: {len(df[(df[column_name] >= lower_bound) & (df[column_name] <= upper_bound)])}")
-	# Filter the DataFrame to remove outliers
-    return df[(df[column_name] >= lower_bound) & (df[column_name] <= upper_bound)]
+    print(f"  Lower bound: {lower_bound}, Upper bound: {upper_bound}")
+    print(f"  Original size: {len(df)}, Size after outlier removal: {len(filtered_df)}")
+
+    return filtered_df
 
 #funtion to process emfit data
 def proc_emfit_data(df):

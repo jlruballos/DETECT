@@ -2,12 +2,13 @@
 """
 Extract and export raw daily-level clinical timeseries features (steps, gait speed, EMFIT)
 for use in RStudio imputation workflows like with the `mice` package.
+Includes engineered features such as normalized values, deltas, and rolling means.
 """
 
 __author__ = "Jorge Ruballos"
 __email__ = "ruballoj@oregonstate.edu"
 __date__ = "2025-05-08"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import pandas as pd
 import numpy as np
@@ -24,7 +25,7 @@ else:
     base_path = r'D:\DETECT'
 
 sys.path.append(os.path.join(base_path, 'HELPERS'))
-from helpers import preprocess_steps, remove_outliers, proc_emfit_data, label_exact_day
+from helpers import preprocess_steps, remove_outliers, proc_emfit_data, label_exact_day, days_since_last_event, days_until_next_event
 
 output_path = os.path.join(base_path, 'OUTPUT', 'raw_export_for_r')
 os.makedirs(output_path, exist_ok=True)
@@ -36,6 +37,7 @@ MAPPING_PATH = os.path.join(base_path, 'DETECT_Data', '_CONTEXT_FILES', 'Study_H
 EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
 CLINICAL_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'DETECT-AD_Enrolled_Amyloid Status_PET_SUVR_QUEST_CENTILOID_20250116.xlsx')
 FALLS_PATH = os.path.join(base_path, 'DETECT_Data', 'HUF', 'kaye_365_huf_detect.csv')
+DEMO_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
 
 # -------- FEATURES --------
 FEATURES = ['steps', 'gait_speed']
@@ -47,6 +49,14 @@ EMFIT_FEATURES = [
     'minhr', 'maxhr', 'avghr', 'avgrr', 'maxrr', 'minrr'
 ]
 
+CLINICAL_FEATURES = [
+    'amyloid'
+]    
+
+DEMO_FEATURES = [
+	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis'
+]
+
 # -------- LOAD DATA --------
 print("Loading datasets...")
 gait_df = pd.read_csv(GAIT_PATH)
@@ -55,6 +65,10 @@ mapping_df = pd.read_csv(MAPPING_PATH)
 emfit_df = pd.read_csv(EMFIT_PATH)
 clinical_df = pd.read_excel(CLINICAL_PATH)
 falls_df = pd.read_csv(FALLS_PATH)
+demo_df = pd.read_csv(DEMO_PATH)
+
+demo_df = demo_df.rename(columns={'record_id': 'subid'})
+clinical_df = clinical_df.rename(columns={'sub_id': 'subid'})
 
 emfit_df = proc_emfit_data(emfit_df)
 
@@ -70,6 +84,9 @@ falls_df['cutoff_dates'] = falls_df.apply(
 )
 falls_df['hospital_visit'] = pd.to_datetime(falls_df['hcru1_date'], errors='coerce').dt.date
 
+#change amalyoid status to 1 and 0 if Positve chane to 1 and if negative change to 0
+clinical_df['amyloid'] = clinical_df['clinical amyloid (+/-) read'].replace({'Positive': 1, 'Negative': 0})
+
 # -------- MERGE AND ALIGN SUBJECTS --------
 mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
 mapping_data = mapping_data.rename(columns={'sub_id': 'subid'})
@@ -80,7 +97,7 @@ gait_df = gait_df.groupby(['subid', 'date'])['gait_speed'].mean().reset_index()
 steps_df = preprocess_steps(steps_df)
 
 # -------- EXPORT PER SUBJECT --------
-subject_ids = clinical_df['sub_id'].dropna().unique()
+subject_ids = clinical_df['subid'].dropna().unique()
 all_subject_data = []
 
 print(f"Found {len(subject_ids)} subjects with clinical data.")
@@ -89,7 +106,9 @@ for subid in subject_ids:
     gait_sub = gait_df[gait_df['subid'] == subid].copy()
     steps_sub = steps_df[steps_df['subid'] == subid].copy()
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
-    subject_falls = falls_df[falls_df['subid'] == subid]  # assumes subid is in falls_df
+    clinical_sub =  clinical_df[clinical_df['subid'] == subid].copy()
+    demo_sub = demo_df[demo_df['subid'] == subid].copy()
+    subject_falls = falls_df[falls_df['subid'] == subid]
     fall_dates = sorted(subject_falls['cutoff_dates'].dropna().tolist())
     hospital_dates = sorted(subject_falls['hospital_visit'].dropna().tolist())
 
@@ -104,14 +123,45 @@ for subid in subject_ids:
     emfit_sub['date'] = pd.to_datetime(emfit_sub['date']).dt.date
     daily_df = pd.merge(daily_df, emfit_sub[['date'] + EMFIT_FEATURES], on='date', how='outer')
     daily_df = daily_df.sort_values('date')
+
+	# Add clinical and demographic features
+    if not clinical_sub.empty:
+        for feat in CLINICAL_FEATURES:
+            daily_df[feat] = clinical_sub.iloc[0][feat]
+   
+    if not demo_sub.empty:
+        for feat in DEMO_FEATURES:
+            daily_df[feat] = demo_sub.iloc[0][feat]
+            
+    # Add engineered features efficiently
+    feature_blocks = []
+    for col in FEATURES + EMFIT_FEATURES:
+        daily_df[col] = pd.to_numeric(daily_df[col], errors='coerce')
+        mean = daily_df[col].mean()
+        std = daily_df[col].std()
+        block = pd.DataFrame({
+            col + '_norm': (daily_df[col] - mean) / std if std else np.nan,
+            col + '_delta': daily_df[col] - mean,
+            col + '_delta_1d': daily_df[col].diff(),
+            col + '_ma_7': daily_df[col].rolling(window=7, min_periods=1).mean()
+        })
+        feature_blocks.append(block)
+
+    engineered_df = pd.concat(feature_blocks, axis=1)
+    daily_df = pd.concat([daily_df.reset_index(drop=True), engineered_df.reset_index(drop=True)], axis=1)
+
     # Add binary event labels
     daily_df['label_fall'] = daily_df['date'].apply(lambda d: label_exact_day(d, fall_dates))
     daily_df['label_hospital'] = daily_df['date'].apply(lambda d: label_exact_day(d, hospital_dates))
-
     daily_df['label'] = daily_df[['label_fall', 'label_hospital']].max(axis=1)
 
-    daily_df['subid'] = subid
+    # Add temporal context features
+    daily_df['days_since_fall'] = daily_df['date'].apply(lambda d: days_since_last_event(d, fall_dates))
+    daily_df['days_until_fall'] = daily_df['date'].apply(lambda d: days_until_next_event(d, fall_dates))
+    daily_df['days_since_hospital'] = daily_df['date'].apply(lambda d: days_since_last_event(d, hospital_dates))
+    daily_df['days_until_hospital'] = daily_df['date'].apply(lambda d: days_until_next_event(d, hospital_dates))
 
+    daily_df['subid'] = subid
     all_subject_data.append(daily_df)
 
 # -------- SAVE FINAL CSV FOR R --------

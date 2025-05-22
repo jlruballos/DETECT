@@ -1,0 +1,23 @@
+No overlap between train and test sets.
+Traceback (most recent call last):
+  File "/mnt/d/DETECT/MODELS/xg_boost.py", line 131, in <module>
+    bst = xgb.train(
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/core.py", line 729, in inner_f
+    return func(**kwargs)
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/training.py", line 183, in train
+    bst.update(dtrain, iteration=i, fobj=obj)
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/core.py", line 2246, in update
+    _check_call(
+  File "/home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/core.py", line 310, in _check_call
+    raise XGBoostError(py_str(_LIB.XGBGetLastError()))
+xgboost.core.XGBoostError: [12:19:08] /workspace/src/objective/./regression_loss.h:69: Check failed: base_score > 0.0f && base_score < 1.0f: base_score must be in (0,1) for logistic loss, got: 135.011
+Stack trace:
+  [bt] (0) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(+0x2a6acc) [0x7f1c485c4acc]
+  [bt] (1) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(+0xed8329) [0x7f1c491f6329]
+  [bt] (2) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(+0x681223) [0x7f1c4899f223]
+  [bt] (3) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(+0x6815ec) [0x7f1c4899f5ec]
+  [bt] (4) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(+0x68bb3b) [0x7f1c489a9b3b]
+  [bt] (5) /home/jorge/miniconda3/envs/detect/lib/python3.10/site-packages/xgboost/lib/libxgboost.so(XGBoosterUpdateOneIter+0x77) [0x7f1c484d4ba7]
+  [bt] (6) /home/jorge/miniconda3/envs/detect/lib/python3.10/lib-dynload/../../libffi.so.8(+0xa052) [0x7f1cb0b32052]
+  [bt] (7) /home/jorge/miniconda3/envs/detect/lib/python3.10/lib-dynload/../../libffi.so.8(+0x8925) [0x7f1cb0b30925]
+  [bt] (8) /home/jorge/miniconda3/envs/detect/lib/python3.10/lib-dynload/../../libffi.so.8(ffi_call+0xde) [0x7f1cb0b3106e]

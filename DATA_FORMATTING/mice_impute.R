@@ -7,6 +7,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(data.table)
+library(purrr)
 
 # -------- CONFIG --------
 method_name <- "pmm"  # Change this to "cart", "mean", etc. when needed
@@ -16,33 +17,93 @@ df <- read.csv("D:/DETECT/OUTPUT/raw_export_for_r/raw_daily_data_all_subjects.cs
 df$date <- as.Date(df$date)
 
 # -------- Define Feature Columns --------
-exclude_cols <- c("subid", "date", "label_fall", "label_hospital", "label")
+exclude_cols <- c("subid", "date", "label_fall", "label_hospital", "label", "days_since_fall", "days_until_fall", "days_since_hospital", "days_until_hospital")
 feature_cols <- setdiff(colnames(df), exclude_cols)
+
+# -------- Add Lag Features per Subject --------
+lag_days <- c(1,7)
+
+df <- df %>%
+  arrange(subid, date) %>%
+  group_by(subid) %>%
+  mutate(across(all_of(feature_cols),
+                .fns = setNames(lapply(lag_days, function(l) function(x) lag(x, l)),
+                                paste0("lag", lag_days)),
+                .names = "{.col}_{.fn}")) %>%
+  ungroup()
+
+# -------- Update Feature Columns to Inlcude Lags --------
+lagged_feature_cols <- grep("_lag\\d+$", colnames(df), value = TRUE)
+mice_feature_cols <- c(feature_cols, lagged_feature_cols)
 
 # -------- Store Missingness Locations --------
 missing_mask <- as.data.frame(is.na(df[, feature_cols]))
 
 # -------- Run MICE Imputation --------
-imp <- mice(df[, feature_cols], m = 1, method = method_name, seed = 42)
+# imp <- mice(df[, mice_feature_cols], m = 1, method = method_name, seed = 42)
+# 
+# # Extract completed dataset
+# completed_df <- complete(imp, 1)
+# completed_df$subid <- df$subid
+# completed_df$date <- df$date
+# completed_df$label_fall <- df$label_fall
+# completed_df$label_hospital <- df$label_hospital
+# completed_df$label <- df$label
+# completed_df$days_since_fall <- df$days_since_fall
+# completed_df$days_until_fall <- df$days_until_fall
+# completed_df$days_since_hospita <- df$days_since_hospital
+# completed_df$days_until_hospital <- df$days_until_hospital
+# 
+# print("Columns in df:")
+# print(colnames(df))
+# 
+# print("Columns in feature_cols:")
+# print(feature_cols)
+# 
+# print("Columns in missing_mask:")
+# print(colnames(missing_mask))
+# 
+# for (feature in feature_cols){
+#   completed_df[[paste0(feature, "_imputed")]]<- as.integer(missing_mask[[feature]])
+# }
+# 
+# #calculate percetn of imputed values per subject for each feature
+# imputed_pct_per_subject <- completed_df %>%
+#   group_by(subid) %>%
+#   summarise(across(ends_with("_imputed"),
+#                     ~ round(100 * sum(.x, na.rm = TRUE)/n(),1),
+#                     .names = "{.col}_pct"))
+# 
+# #merge those percent values back into the main dataset
+# completed_df <- left_join(completed_df, imputed_pct_per_subject, by = "subid")
 
-# Extract completed dataset
-completed_df <- complete(imp, 1)
-completed_df$subid <- df$subid
-completed_df$date <- df$date
+# -------- Impute per Subject using MICE --------
+impute_subject <- function(sub_df) {
+  imp <- mice(sub_df[, mice_feature_cols], m = 1, method = method_name, seed = 42)
+  completed <- complete(imp, 1)
+  # Reattach non-feature metadata
+  completed$subid <- sub_df$subid
+  completed$date <- sub_df$date
+  completed$label_fall <- sub_df$label_fall
+  completed$label_hospital <- sub_df$label_hospital
+  completed$label <- sub_df$label
+  completed$days_since_fall <- sub_df$days_since_fall
+  completed$days_until_fall <- sub_df$days_until_fall
+  completed$days_since_hospital <- sub_df$days_since_hospital
+  completed$days_until_hospital <- sub_df$days_until_hospital
+  return(completed)
+}
 
-print("Columns in df:")
-print(colnames(df))
+completed_df <- df %>%
+  group_split(subid) %>%
+  map_dfr(impute_subject)
 
-print("Columns in feature_cols:")
-print(feature_cols)
-
-print("Columns in missing_mask:")
-print(colnames(missing_mask))
-
+# Track which values were originally missing
 for (feature in feature_cols){
   completed_df[[paste0(feature, "_imputed")]]<- as.integer(missing_mask[[feature]])
 }
 
+# -------- Add imputed flags and percent imputed --------
 #calculate percetn of imputed values per subject for each feature
 imputed_pct_per_subject <- completed_df %>%
   group_by(subid) %>%
@@ -83,7 +144,7 @@ for (sid in unique(completed_df$subid)) {
 
 # -------- Save Imputed Data --------
 write.csv(completed_df,
-          paste0("D:/DETECT/OUTPUT/raw_export_for_r/imputed_detect_data_", method_name, ".csv"),
+          paste0("D:/DETECT/OUTPUT/raw_export_for_r/labeled_daily_data_", method_name, ".csv"),
           row.names = FALSE)
 
 # -------- Create Diagnostic Plots --------

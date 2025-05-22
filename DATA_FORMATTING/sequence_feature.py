@@ -64,7 +64,7 @@ from vae_imputer import impute_subject_data
 
 
 program_name = 'sequence_feature'
-imputation_method = 'vae'  # Method for filling missing values
+imputation_method = 'ffill'  # Method for filling missing values
 # VAE variant for imputation — choose one of the following:
 # 'Zero Imputation': Basic VAE, missing values are replaced with zeros. Mask is not used.
 # 'Encoder Mask': Adds the missingness mask as input to the encoder (but not the decoder). Helps the model learn which parts are observed.
@@ -167,8 +167,8 @@ for subid in subject_ids:
     subject_falls = falls_df[falls_df['subid'] == subid]
     
     #remove outliers from data
-    gait_sub = remove_outliers(gait_sub, 'gait_speed')
-    steps_sub = remove_outliers(steps_sub, 'steps')
+    #gait_sub = remove_outliers(gait_sub, 'gait_speed')
+    #steps_sub = remove_outliers(steps_sub, 'steps')
 
     if gait_sub.empty and steps_sub.empty and emfit_sub.empty:
         print(f"Skipping subject {subid} due to missing data.")

@@ -9,17 +9,27 @@ import sys
 from sklearn.model_selection import GroupShuffleSplit
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 # Define base paths depending on environment
 base_path = '/mnt/d/DETECT'
+
 
 # Add helpers directory to system path
 sys.path.append(os.path.join(base_path, 'HELPERS'))
 from helpers import add_future_event_window_labels
 
-csv_path = "/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_vae.csv"
-
+csv_path = "/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_ffill.csv"
+#csv_path = '/mnt/d/DETECT/OUTPUT/raw_export_for_r/imputed_detect_data_pmm_global.csv'
+#csv_path = '/mnt/d/DETECT/OUTPUT/raw_export_for_r/raw_daily_data_all_subjects.csv'
 df = pd.read_csv(csv_path)
+
+# Set your imputer name manually or programmatically
+imputer = "ffill"  # or "vae", "mice", "pmm", etc.
+
+# Generate timestamped run name
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+run_name = f"xgb_{imputer}_falls_within7_{timestamp}"
 
 print(df.columns)
 
@@ -59,8 +69,10 @@ features = [
     'avgrr_norm', 'avgrr_delta', 'avgrr_delta_1d', 'avgrr_ma_7',
     'maxrr_norm', 'maxrr_delta', 'maxrr_delta_1d', 'maxrr_ma_7',
     'minrr_norm', 'minrr_delta', 'minrr_delta_1d', 'minrr_ma_7',
-    'days_since_fall', 'days_until_fall', 'days_since_hospital', 'days_until_hospital'
+    'days_since_fall'
 ]
+
+#'days_since_fall', 'days_until_fall', 'days_since_hospital', 'days_until_hospital'
 
 target_col = 'label_fall_within7'
 
@@ -83,9 +95,9 @@ y_train, y_test = y[train_idx], y[test_idx]
 
 #log to wandb
 wandb.init(project="detect-xgboost", 
-		name="xgb_fall_within7",
+		name=run_name,
 		config={
-			"imputer": "vae",
+			"imputer": imputer,
 			"model": "XGboost",
 			"label_shift_days": 7,
 			"features": features,
@@ -169,7 +181,7 @@ results_df = pd.DataFrame({
 })
 
 # Save locally
-results_path = "/mnt/d/DETECT/OUTPUT/xg_boost/xgboost_predictions.csv"
+results_path = f"/mnt/d/DETECT/OUTPUT/xg_boost/xgboost_predictions_{imputer}_{timestamp}.csv"
 os.makedirs(os.path.dirname(results_path), exist_ok=True)  # Create folder if missing
 results_df.to_csv(results_path, index=False)
 print(f"Saved predictions to: {results_path}")

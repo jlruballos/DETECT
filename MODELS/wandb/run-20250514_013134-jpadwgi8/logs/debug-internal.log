@@ -1,0 +1,16 @@
+{"time":"2025-05-14T01:31:34.594127158-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/mnt/d/DETECT/MODELS/wandb/run-20250514_013134-jpadwgi8/logs/debug-core.log"}
+{"time":"2025-05-14T01:31:35.040026411-07:00","level":"INFO","msg":"created new stream","id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:35.040251997-07:00","level":"INFO","msg":"stream: started","id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:35.040269307-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:35.040293212-07:00","level":"INFO","msg":"sender: started","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:35.040299595-07:00","level":"INFO","msg":"handler: started","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:35.255955301-07:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-14T01:31:53.369108292-07:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-14T01:31:53.369314041-07:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-14T01:31:53.975008016-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-14T01:31:54.30955433-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-05-14T01:31:54.322607135-07:00","level":"INFO","msg":"stream: closing","id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:54.323325443-07:00","level":"INFO","msg":"handler: closed","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:54.323429459-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:54.32355314-07:00","level":"INFO","msg":"sender: closed","stream_id":"jpadwgi8"}
+{"time":"2025-05-14T01:31:54.327076243-07:00","level":"INFO","msg":"stream: closed","id":"jpadwgi8"}

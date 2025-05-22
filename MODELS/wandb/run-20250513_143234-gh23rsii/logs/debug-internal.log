@@ -1,0 +1,16 @@
+{"time":"2025-05-13T14:32:34.484343154-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/mnt/d/DETECT/MODELS/wandb/run-20250513_143234-gh23rsii/logs/debug-core.log"}
+{"time":"2025-05-13T14:32:34.818912831-07:00","level":"INFO","msg":"created new stream","id":"gh23rsii"}
+{"time":"2025-05-13T14:32:34.819492023-07:00","level":"INFO","msg":"stream: started","id":"gh23rsii"}
+{"time":"2025-05-13T14:32:34.819534357-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:34.819591551-07:00","level":"INFO","msg":"handler: started","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:34.820042101-07:00","level":"INFO","msg":"sender: started","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:34.972394712-07:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-13T14:32:41.250221434-07:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-13T14:32:41.250739068-07:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-13T14:32:41.872065115-07:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-13T14:32:42.129797547-07:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-05-13T14:32:42.139625636-07:00","level":"INFO","msg":"stream: closing","id":"gh23rsii"}
+{"time":"2025-05-13T14:32:42.141407382-07:00","level":"INFO","msg":"handler: closed","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:42.14146204-07:00","level":"INFO","msg":"writer: Close: closed","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:42.141598954-07:00","level":"INFO","msg":"sender: closed","stream_id":"gh23rsii"}
+{"time":"2025-05-13T14:32:42.142872678-07:00","level":"INFO","msg":"stream: closed","id":"gh23rsii"}
