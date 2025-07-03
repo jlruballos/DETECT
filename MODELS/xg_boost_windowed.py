@@ -23,10 +23,20 @@ base_path = '/mnt/d/DETECT'
 sys.path.append(os.path.join(base_path, 'HELPERS'))
 from helpers import add_future_event_window_labels
 
-csv_path = "/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_mean.csv"
+csv_path = "/mnt/d/DETECT/OUTPUT/windowed_data/windowed_data_7_7_lag0.csv"
 #csv_path = '/mnt/d/DETECT/OUTPUT/raw_export_for_r/imputed_detect_data_pmm_global.csv'
 #csv_path = '/mnt/d/DETECT/OUTPUT/raw_export_for_r/raw_daily_data_all_subjects.csv'
 df = pd.read_csv(csv_path)
+
+window = 7  # days in the past to consider for features
+pred_horizon = 7  # days in the future to predict
+lag = 0  # number of lag features to create
+# Set target
+target_col = 'label'
+
+# Dynamically infer features (excluding ID/date/label columns)
+exclude_cols = ['subid', 'start_date', 'end_date', 'label']
+features = [col for col in df.columns if col not in exclude_cols]
 
 # Set your imputer name manually or programmatically
 imputer = "mean"  # or "vae", "mice", "pmm", etc.
@@ -35,52 +45,52 @@ imbalance_strategy = "scale-pos-weight"  # Options: "adasyn", "smote", "none", u
 
 # Generate timestamped run name
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-run_name = f"xgb_{imputer}_falls_within7_{imbalance_strategy}_{timestamp}"
+run_name = f"xgb_{imputer}_wind{window}_pred{pred_horizon}_lag{lag}_{imbalance_strategy}_{timestamp}"
 
 print(df.columns)
 
 #add label for "fall within next 7 days"
-df = add_future_event_window_labels(df, event_cols=['label_fall'], horizons=[7])
+#df = add_future_event_window_labels(df, event_cols=['label_fall'], horizons=[7])
 
-features = [
-    'gait_speed', 'steps', 'awakenings', 'bedexitcount', 'end_sleep_time',
-    'inbed_time', 'outbed_time', 'sleepscore', 'durationinsleep', 'durationawake',
-    'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep', 'time_in_bed_after_sleep',
-    'total_time_in_bed', 'tossnturncount', 'sleep_period', 'minhr', 'maxhr',
-    'avghr', 'avgrr', 'maxrr', 'minrr', 'steps_norm', 'steps_delta',
-    'steps_delta_1d', 'steps_ma_7', 'gait_speed_norm', 'gait_speed_delta',
-    'gait_speed_delta_1d', 'gait_speed_ma_7', 'awakenings_norm', 'awakenings_delta',
-    'awakenings_delta_1d', 'awakenings_ma_7', 'bedexitcount_norm', 'bedexitcount_delta',
-    'bedexitcount_delta_1d', 'bedexitcount_ma_7', 'end_sleep_time_norm',
-    'end_sleep_time_delta', 'end_sleep_time_delta_1d', 'end_sleep_time_ma_7',
-    'inbed_time_norm', 'inbed_time_delta', 'inbed_time_delta_1d', 'inbed_time_ma_7',
-    'outbed_time_norm', 'outbed_time_delta', 'outbed_time_delta_1d', 'outbed_time_ma_7',
-    'sleepscore_norm', 'sleepscore_delta', 'sleepscore_delta_1d', 'sleepscore_ma_7',
-    'durationinsleep_norm', 'durationinsleep_delta', 'durationinsleep_delta_1d',
-    'durationinsleep_ma_7', 'durationawake_norm', 'durationawake_delta',
-    'durationawake_delta_1d', 'durationawake_ma_7', 'waso_norm', 'waso_delta',
-    'waso_delta_1d', 'waso_ma_7', 'hrvscore_norm', 'hrvscore_delta',
-    'hrvscore_delta_1d', 'hrvscore_ma_7', 'start_sleep_time_norm',
-    'start_sleep_time_delta', 'start_sleep_time_delta_1d', 'start_sleep_time_ma_7',
-    'time_to_sleep_norm', 'time_to_sleep_delta', 'time_to_sleep_delta_1d',
-    'time_to_sleep_ma_7', 'time_in_bed_after_sleep_norm', 'time_in_bed_after_sleep_delta',
-    'time_in_bed_after_sleep_delta_1d', 'time_in_bed_after_sleep_ma_7',
-    'total_time_in_bed_norm', 'total_time_in_bed_delta', 'total_time_in_bed_delta_1d',
-    'total_time_in_bed_ma_7', 'tossnturncount_norm', 'tossnturncount_delta',
-    'tossnturncount_delta_1d', 'tossnturncount_ma_7', 'sleep_period_norm',
-    'sleep_period_delta', 'sleep_period_delta_1d', 'sleep_period_ma_7',
-    'minhr_norm', 'minhr_delta', 'minhr_delta_1d', 'minhr_ma_7',
-    'maxhr_norm', 'maxhr_delta', 'maxhr_delta_1d', 'maxhr_ma_7',
-    'avghr_norm', 'avghr_delta', 'avghr_delta_1d', 'avghr_ma_7',
-    'avgrr_norm', 'avgrr_delta', 'avgrr_delta_1d', 'avgrr_ma_7',
-    'maxrr_norm', 'maxrr_delta', 'maxrr_delta_1d', 'maxrr_ma_7',
-    'minrr_norm', 'minrr_delta', 'minrr_delta_1d', 'minrr_ma_7',
-     'days_since_fall' 
-]
+# features = [
+#     'gait_speed', 'steps', 'awakenings', 'bedexitcount', 'end_sleep_time',
+#     'inbed_time', 'outbed_time', 'sleepscore', 'durationinsleep', 'durationawake',
+#     'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep', 'time_in_bed_after_sleep',
+#     'total_time_in_bed', 'tossnturncount', 'sleep_period', 'minhr', 'maxhr',
+#     'avghr', 'avgrr', 'maxrr', 'minrr', 'steps_norm', 'steps_delta',
+#     'steps_delta_1d', 'steps_ma_7', 'gait_speed_norm', 'gait_speed_delta',
+#     'gait_speed_delta_1d', 'gait_speed_ma_7', 'awakenings_norm', 'awakenings_delta',
+#     'awakenings_delta_1d', 'awakenings_ma_7', 'bedexitcount_norm', 'bedexitcount_delta',
+#     'bedexitcount_delta_1d', 'bedexitcount_ma_7', 'end_sleep_time_norm',
+#     'end_sleep_time_delta', 'end_sleep_time_delta_1d', 'end_sleep_time_ma_7',
+#     'inbed_time_norm', 'inbed_time_delta', 'inbed_time_delta_1d', 'inbed_time_ma_7',
+#     'outbed_time_norm', 'outbed_time_delta', 'outbed_time_delta_1d', 'outbed_time_ma_7',
+#     'sleepscore_norm', 'sleepscore_delta', 'sleepscore_delta_1d', 'sleepscore_ma_7',
+#     'durationinsleep_norm', 'durationinsleep_delta', 'durationinsleep_delta_1d',
+#     'durationinsleep_ma_7', 'durationawake_norm', 'durationawake_delta',
+#     'durationawake_delta_1d', 'durationawake_ma_7', 'waso_norm', 'waso_delta',
+#     'waso_delta_1d', 'waso_ma_7', 'hrvscore_norm', 'hrvscore_delta',
+#     'hrvscore_delta_1d', 'hrvscore_ma_7', 'start_sleep_time_norm',
+#     'start_sleep_time_delta', 'start_sleep_time_delta_1d', 'start_sleep_time_ma_7',
+#     'time_to_sleep_norm', 'time_to_sleep_delta', 'time_to_sleep_delta_1d',
+#     'time_to_sleep_ma_7', 'time_in_bed_after_sleep_norm', 'time_in_bed_after_sleep_delta',
+#     'time_in_bed_after_sleep_delta_1d', 'time_in_bed_after_sleep_ma_7',
+#     'total_time_in_bed_norm', 'total_time_in_bed_delta', 'total_time_in_bed_delta_1d',
+#     'total_time_in_bed_ma_7', 'tossnturncount_norm', 'tossnturncount_delta',
+#     'tossnturncount_delta_1d', 'tossnturncount_ma_7', 'sleep_period_norm',
+#     'sleep_period_delta', 'sleep_period_delta_1d', 'sleep_period_ma_7',
+#     'minhr_norm', 'minhr_delta', 'minhr_delta_1d', 'minhr_ma_7',
+#     'maxhr_norm', 'maxhr_delta', 'maxhr_delta_1d', 'maxhr_ma_7',
+#     'avghr_norm', 'avghr_delta', 'avghr_delta_1d', 'avghr_ma_7',
+#     'avgrr_norm', 'avgrr_delta', 'avgrr_delta_1d', 'avgrr_ma_7',
+#     'maxrr_norm', 'maxrr_delta', 'maxrr_delta_1d', 'maxrr_ma_7',
+#     'minrr_norm', 'minrr_delta', 'minrr_delta_1d', 'minrr_ma_7',
+#      'days_since_fall' 
+# ]
 
 #'days_since_fall', 'days_until_fall', 'days_since_hospital', 'days_until_hospital'
 
-target_col = 'label_fall_within7'
+#target_col = 'label_fall_within7'
 
 #drop rows with missing features or labels
 # Only drop rows where label is missing
@@ -139,15 +149,16 @@ elif imbalance_strategy == "smote":
     print(f"Original training size: {og_training_size}, After SMOTE: {len(y_train)}")
     print(f"Class balance after SMOTE: {np.bincount(y_train)}")
 
-    
+if imbalance_strategy in ["adasyn", "smote", "undersample"]:
+    X_test = imputer_obj.transform(X_test)
+
 #log to wandb
-wandb.init(project="detect-xgboost", 
+wandb.init(project="detect-windowed-xgboost", 
 		name=run_name,
 		config={
 			"imputer": imputer,
 			"imbalance_strategy": imbalance_strategy,
 			"model": "XGboost",
-			"label_shift_days": 7,
 			"features": features,
 		}
 )
@@ -275,6 +286,13 @@ metrics = {
     'roc_auc': roc_auc_score(y_test, y_pred_proba)
 }
 
+wandb.config.update({
+    "window_size_days": window,
+    "prediction_horizon_days": pred_horizon,
+    "lag": lag,
+    "num_features": len(features)
+})
+
 #compute confusion matrix
 cm = confusion_matrix(y_test, y_pred)
 labels = ["No Fall", "Fall"]
@@ -298,7 +316,8 @@ test_df = df.iloc[test_idx].reset_index(drop=True)
 # Build a DataFrame with subid, date, label, prediction
 results_df = pd.DataFrame({
     "subid": test_df["subid"],
-    "date": test_df["date"],
+    "start_date": test_df["start_date"],
+    "end_date": test_df["end_date"],
     "true_label": y_test,
     "predicted_label": y_pred,
     "predicted_prob": y_pred_proba

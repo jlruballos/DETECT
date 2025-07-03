@@ -1,5 +1,5 @@
 # -------------------------------
-# MICE Imputation with Method-Named Folder and Diagnostic Plots
+# MICE Imputation for All Subjects – Combined Output + Plots
 # -------------------------------
 
 library(mice)
@@ -8,21 +8,34 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 library(purrr)
+library(zoo)
 
 # -------- CONFIG --------
-method_name <- "pmm"  # Change this to "cart", "mean", etc. when needed
+method_name <- "pmm"
+input_path <- "D:/DETECT/OUTPUT/raw_export_for_r/raw_daily_data_all_subjects.csv"
+output_root <- file.path("D:/DETECT/OUTPUT/raw_export_for_r", method_name)
+plot_root <- file.path(output_root, "diagnostics")
+output_file <- file.path(output_root, paste0("labeled_daily_data_", method_name, "_all_subjects.csv"))
 
-# -------- Load Data --------
-df <- read.csv("D:/DETECT/OUTPUT/raw_export_for_r/raw_daily_data_all_subjects.csv")
+dir.create(output_root, showWarnings = FALSE, recursive = TRUE)
+dir.create(plot_root, showWarnings = FALSE, recursive = TRUE)
+
+# -------- Load & Clean Data --------
+df <- read.csv(input_path)
 df$date <- as.Date(df$date)
 
-# -------- Define Feature Columns --------
-exclude_cols <- c("subid", "date", "label_fall", "label_hospital", "label", "days_since_fall", "days_until_fall", "days_since_hospital", "days_until_hospital")
+# Drop engineered columns
+engineered_cols <- grep("(_delta|_norm|_ma_7|_delta_1d)", colnames(df), value = TRUE)
+df <- df %>% select(-all_of(engineered_cols))
+
+# Define base columns
+exclude_cols <- c("subid", "date", "label_fall", "label_hospital", "label",
+                  "days_since_fall", "days_until_fall", 
+                  "days_since_hospital", "days_until_hospital")
 feature_cols <- setdiff(colnames(df), exclude_cols)
 
-# -------- Add Lag Features per Subject --------
-lag_days <- c(1,7)
-
+# Add lag features
+lag_days <- c(1, 7)
 df <- df %>%
   arrange(subid, date) %>%
   group_by(subid) %>%
@@ -32,56 +45,26 @@ df <- df %>%
                 .names = "{.col}_{.fn}")) %>%
   ungroup()
 
-# -------- Update Feature Columns to Inlcude Lags --------
 lagged_feature_cols <- grep("_lag\\d+$", colnames(df), value = TRUE)
 mice_feature_cols <- c(feature_cols, lagged_feature_cols)
 
-# -------- Store Missingness Locations --------
-missing_mask <- as.data.frame(is.na(df[, feature_cols]))
+# -------- Loop Through Subjects --------
+all_subids <- unique(df$subid)
+all_imputed <- list()
 
-# -------- Run MICE Imputation --------
-# imp <- mice(df[, mice_feature_cols], m = 1, method = method_name, seed = 42)
-# 
-# # Extract completed dataset
-# completed_df <- complete(imp, 1)
-# completed_df$subid <- df$subid
-# completed_df$date <- df$date
-# completed_df$label_fall <- df$label_fall
-# completed_df$label_hospital <- df$label_hospital
-# completed_df$label <- df$label
-# completed_df$days_since_fall <- df$days_since_fall
-# completed_df$days_until_fall <- df$days_until_fall
-# completed_df$days_since_hospita <- df$days_since_hospital
-# completed_df$days_until_hospital <- df$days_until_hospital
-# 
-# print("Columns in df:")
-# print(colnames(df))
-# 
-# print("Columns in feature_cols:")
-# print(feature_cols)
-# 
-# print("Columns in missing_mask:")
-# print(colnames(missing_mask))
-# 
-# for (feature in feature_cols){
-#   completed_df[[paste0(feature, "_imputed")]]<- as.integer(missing_mask[[feature]])
-# }
-# 
-# #calculate percetn of imputed values per subject for each feature
-# imputed_pct_per_subject <- completed_df %>%
-#   group_by(subid) %>%
-#   summarise(across(ends_with("_imputed"),
-#                     ~ round(100 * sum(.x, na.rm = TRUE)/n(),1),
-#                     .names = "{.col}_pct"))
-# 
-# #merge those percent values back into the main dataset
-# completed_df <- left_join(completed_df, imputed_pct_per_subject, by = "subid")
-
-# -------- Impute per Subject using MICE --------
-impute_subject <- function(sub_df) {
-  imp <- mice(sub_df[, mice_feature_cols], m = 1, method = method_name, seed = 42)
+for (sid in all_subids) {
+  cat("🔄 Processing subject:", sid, "\n")
+  
+  sub_df <- df %>% filter(subid == sid)
+  if (nrow(sub_df) < 3) next
+  
+  missing_mask <- sub_df %>% select(all_of(feature_cols)) %>% is.na() %>% as.data.frame()
+  
+  imp <- mice(sub_df[, mice_feature_cols], m = 1, method = method_name, maxit = 5,
+              seed = 42, printFlag = FALSE)
   completed <- complete(imp, 1)
-  # Reattach non-feature metadata
+  
+  # Reattach metadata
   completed$subid <- sub_df$subid
   completed$date <- sub_df$date
   completed$label_fall <- sub_df$label_fall
@@ -91,111 +74,61 @@ impute_subject <- function(sub_df) {
   completed$days_until_fall <- sub_df$days_until_fall
   completed$days_since_hospital <- sub_df$days_since_hospital
   completed$days_until_hospital <- sub_df$days_until_hospital
-  return(completed)
-}
-
-completed_df <- df %>%
-  group_split(subid) %>%
-  map_dfr(impute_subject)
-
-# Track which values were originally missing
-for (feature in feature_cols){
-  completed_df[[paste0(feature, "_imputed")]]<- as.integer(missing_mask[[feature]])
-}
-
-# -------- Add imputed flags and percent imputed --------
-#calculate percetn of imputed values per subject for each feature
-imputed_pct_per_subject <- completed_df %>%
-  group_by(subid) %>%
-  summarise(across(ends_with("_imputed"),
-                    ~ round(100 * sum(.x, na.rm = TRUE)/n(),1),
-                    .names = "{.col}_pct"))
-
-#merge those percent values back into the main dataset
-completed_df <- left_join(completed_df, imputed_pct_per_subject, by = "subid")
-
-# -------- Temporal Feature Engineering --------
-for (col in feature_cols) {
-  completed_df[[paste0(col, "_delta")]] <- NA_real_
-  completed_df[[paste0(col, "_delta_1d")]] <- NA_real_
-  completed_df[[paste0(col, "_norm")]] <- NA_real_
-  completed_df[[paste0(col, "_ma_7")]] <- NA_real_
-}
-
-for (sid in unique(completed_df$subid)) {
-  sub_df <- completed_df[completed_df$subid == sid, ]
-  sub_df <- sub_df[order(sub_df$date), ]
   
+  # Clamp & Flag
   for (col in feature_cols) {
-    vals <- sub_df[[col]]
-    mean_val <- mean(vals, na.rm = TRUE)
-    sd_val <- sd(vals, na.rm = TRUE)
-    delta <- vals - mean_val
-    delta_1d <- c(NA, diff(vals))
-    norm <- ifelse(sd_val != 0, delta / sd_val, NA)
-    ma_7 <- rollapply(vals, width = 7, FUN = mean, fill = NA, align = "right", partial = TRUE)
-    
-    completed_df[completed_df$subid == sid, paste0(col, "_delta")] <- delta
-    completed_df[completed_df$subid == sid, paste0(col, "_delta_1d")] <- delta_1d
-    completed_df[completed_df$subid == sid, paste0(col, "_norm")] <- norm
-    completed_df[completed_df$subid == sid, paste0(col, "_ma_7")] <- ma_7
+    completed[[col]] <- pmax(completed[[col]], 0)
+    completed[[paste0(col, "_imputed")]] <- as.integer(missing_mask[[col]])
   }
-}
-
-# -------- Save Imputed Data --------
-write.csv(completed_df,
-          paste0("D:/DETECT/OUTPUT/raw_export_for_r/labeled_daily_data_", method_name, ".csv"),
-          row.names = FALSE)
-
-# -------- Create Diagnostic Plots --------
-output_root <- file.path("D:/DETECT/OUTPUT/raw_export_for_r/diagnostics", method_name)
-dir.create(output_root, showWarnings = FALSE, recursive = TRUE)
-
-unique_subs <- unique(df$subid)
-
-for (s in unique_subs) {
-  original_sub <- df %>% filter(subid == s)
-  imputed_sub <- completed_df %>% filter(subid == s)
-  mask_sub <- missing_mask[df$subid == s, , drop = FALSE]
   
-  sub_dir <- file.path(output_root, paste0("subid_", s))
+  # Temporal Features
+  completed <- completed %>%
+    arrange(date) %>%
+    mutate(across(all_of(feature_cols), 
+                  list(
+                    delta = ~ . - mean(., na.rm = TRUE),
+                    delta_1d = ~ c(NA, diff(.)),
+                    norm = ~ {
+                      m <- mean(., na.rm = TRUE)
+                      s <- sd(., na.rm = TRUE)
+                      ifelse(s > 0, (. - m)/s, NA)
+                    },
+                    ma_7 = ~ rollapply(., 7, mean, fill = NA, align = "right", partial = TRUE)
+                  ), .names = "{.col}_{.fn}"))
+  
+  # Save diagnostic plots
+  sub_dir <- file.path(plot_root, paste0("subid_", sid))
+  dir.create(sub_dir, showWarnings = FALSE, recursive = TRUE)
   histo_dir <- file.path(sub_dir, "histograms")
   line_dir <- file.path(sub_dir, "lineplots")
-  dir.create(sub_dir, showWarnings = FALSE, recursive = TRUE)
   dir.create(histo_dir, showWarnings = FALSE)
   dir.create(line_dir, showWarnings = FALSE)
   
   for (col in feature_cols) {
-    orig_vals <- original_sub[[col]]
-    imputed_vals <- imputed_sub[[col]]
+    orig_vals <- sub_df[[col]]
+    imputed_vals <- completed[[col]]
+    imputed_flag <- missing_mask[[col]]
     
     if (all(is.na(orig_vals)) || all(is.na(imputed_vals))) next
     
-    # ----- Overlaid Histogram -----
+    # Histogram
     overlay_df <- data.frame(
-      value = c(orig_vals[!is.na(orig_vals)], imputed_vals[mask_sub[, col]]),
+      value = c(orig_vals[!is.na(orig_vals)], imputed_vals[imputed_flag]),
       type = c(rep("Original", sum(!is.na(orig_vals))),
-               rep("Imputed", sum(mask_sub[, col], na.rm = TRUE)))
+               rep("Imputed", sum(imputed_flag, na.rm = TRUE)))
     )
     
     g_hist <- ggplot(overlay_df, aes(x = value, fill = type)) +
       geom_histogram(alpha = 0.5, position = "identity", bins = 30) +
       scale_fill_manual(values = c("Original" = "gray", "Imputed" = "red")) +
-      labs(title = paste("Histogram:", col, "- Subject", s),
+      labs(title = paste("Histogram:", col, "- Subid", sid),
            x = col, y = "Count") +
       theme_minimal()
-    
-    ggsave(filename = file.path(histo_dir, paste0(col, "_hist_overlay_", s, ".png")),
+    ggsave(filename = file.path(histo_dir, paste0(col, "_hist_", sid, ".png")),
            plot = g_hist, width = 8, height = 4)
     
-    # ----- Time Series with Red Dots + % Imputed -----
-    if (length(imputed_vals) < 3 || all(is.na(imputed_vals))) next
-    imputed_flag <- mask_sub[, col]
-    n_imputed <- sum(imputed_flag, na.rm = TRUE)
-    total_vals <- sum(!is.na(orig_vals)) + n_imputed
-    imputed_pct <- round(100 * n_imputed / total_vals, 1)
-    
-    plot_df <- imputed_sub
+    # Time series
+    plot_df <- completed
     plot_df$imputed <- imputed_flag
     
     g_line <- ggplot(plot_df, aes(x = date, y = !!sym(col))) +
@@ -203,12 +136,18 @@ for (s in unique_subs) {
       geom_point(data = subset(plot_df, imputed == TRUE),
                  aes(x = date, y = !!sym(col)),
                  color = "red", size = 2) +
-      labs(title = paste("Imputation for", col, "- Subject", s),
-           subtitle = paste(n_imputed, "imputed points (", imputed_pct, "%)", sep = ""),
+      labs(title = paste("Imputed:", col, "- Subid", sid),
+           subtitle = paste(sum(imputed_flag, na.rm = TRUE), "points"),
            y = col, x = "Date") +
       theme_minimal()
-    
-    ggsave(filename = file.path(line_dir, paste0(col, "_", s, ".png")),
+    ggsave(filename = file.path(line_dir, paste0(col, "_line_", sid, ".png")),
            plot = g_line, width = 8, height = 4)
   }
+  
+  all_imputed[[as.character(sid)]] <- completed
 }
+
+# -------- Save Combined Data --------
+combined_df <- bind_rows(all_imputed)
+write.csv(combined_df, output_file, row.names = FALSE)
+cat("✅ Saved combined imputed dataset to:", output_file, "\n")

@@ -33,6 +33,7 @@ import numpy as np
 import os
 from datetime import datetime
 import sys
+from itertools import chain
 
 # -------- CONFIG --------
 USE_WSL = True  # Set to True if running inside WSL (Linux on Windows)
@@ -51,7 +52,6 @@ from helpers import (
     preprocess_steps,
     label_exact_day,
     days_since_last_event,
-    days_until_next_event,
     impute_missing_data,
     plot_imp_diag_histo,  
     track_missingness,
@@ -64,7 +64,7 @@ from vae_imputer import impute_subject_data
 
 
 program_name = 'sequence_feature'
-imputation_method = 'ffill'  # Method for filling missing values
+imputation_method = 'mean'  # Method for filling missing values
 # VAE variant for imputation — choose one of the following:
 # 'Zero Imputation': Basic VAE, missing values are replaced with zeros. Mask is not used.
 # 'Encoder Mask': Adds the missingness mask as input to the encoder (but not the decoder). Helps the model learn which parts are observed.
@@ -82,6 +82,7 @@ MAPPING_PATH = os.path.join(base_path, 'DETECT_Data', '_CONTEXT_FILES', 'Study_H
 FALLS_PATH = os.path.join(base_path, 'DETECT_Data', 'HUF', 'kaye_365_huf_detect.csv')
 EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
 CLINICAL_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'DETECT-AD_Enrolled_Amyloid Status_PET_SUVR_QUEST_CENTILOID_20250116.xlsx')
+DEMO_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
 
 # -------- LOAD DATA --------
 print("Loading data...")
@@ -92,6 +93,11 @@ mapping_df = pd.read_csv(MAPPING_PATH)
 falls_df = pd.read_csv(FALLS_PATH, low_memory=False)
 emfit_df = pd.read_csv(EMFIT_PATH)
 clinical_df = pd.read_excel(CLINICAL_PATH)
+demo_df = pd.read_csv(DEMO_PATH)
+
+#--------RENAME COLUMNS --------
+demo_df = demo_df.rename(columns={'record_id': 'subid'})
+clinical_df = clinical_df.rename(columns={'sub_id': 'subid'})
 
 #-------- EMFIT DATA PREPROCESSING --------
 emfit_df = proc_emfit_data(emfit_df)
@@ -116,7 +122,18 @@ EMFIT_FEATURES = [
     'avghr', 'avgrr', 'maxrr', 'minrr'
 ]
 
+CLINICAL_FEATURES = [
+    'amyloid'
+] 
+
+DEMO_FEATURES = [
+	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat'
+]
+
 # -------- PREPROCESS --------
+#change amalyoid status to 1 and 0 if Positve chane to 1 and if negative change to 0
+clinical_df['amyloid'] = clinical_df['clinical amyloid (+/-) read'].replace({'Positive': 1, 'Negative': 0})
+
 # Filter to ensure each home_id maps to only one subid
 mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
 mapping_data = mapping_data.rename(columns={'sub_id': 'subid'})
@@ -134,17 +151,61 @@ steps_df = preprocess_steps(steps_df)
 
 # Ensure date columns are datetime
 falls_df['fall1_date'] = pd.to_datetime(falls_df['fall1_date'], errors='coerce')
+falls_df['fall2_date'] = pd.to_datetime(falls_df['fall2_date'], errors='coerce')
+falls_df['fall3_date'] = pd.to_datetime(falls_df['fall3_date'], errors='coerce')
 falls_df['start_date'] = pd.to_datetime(falls_df['StartDate'], errors='coerce')
 
 # Fill missing fall1_date with (survey_date - 1 day) if fall == 1
-falls_df['cutoff_dates'] = falls_df.apply(
+falls_df['fall1_date'] = falls_df.apply(
     lambda row: row['fall1_date'].date() if pd.notnull(row['fall1_date']) 
     else ((row['start_date'] - pd.Timedelta(days=1)).date() if row['FALL'] == 1 else pd.NaT),
     axis=1
 )
 # Process fall and hospital event dates
-#falls_df['cutoff_dates'] = pd.to_datetime(falls_df['fall1_date']).dt.date
 falls_df['hospital_visit'] = pd.to_datetime(falls_df['hcru1_date']).dt.date
+falls_df['hospital_visit_2'] = pd.to_datetime(falls_df['hcru2_date'], errors='coerce').dt.date
+
+#combine hospital visit dates into a single column
+falls_df['hospital_dates'] = falls_df.apply(
+	lambda row: sorted(
+		[date for date in [row['hospital_visit'], row['hospital_visit_2']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import accident date
+falls_df['ACDT1_DATE'] = pd.to_datetime(falls_df['acdt1_date'], errors='coerce').dt.date
+falls_df['ACDT2_DATE'] = pd.to_datetime(falls_df['acdt2_date'], errors='coerce').dt.date
+falls_df['ACDT3_DATE'] = pd.to_datetime(falls_df['acdt3_date'], errors='coerce').dt.date
+
+#combine accident dates into a single column
+falls_df['accident_dates'] = falls_df.apply(
+	lambda row: sorted(
+		[date for date in [row['ACDT1_DATE'], row['ACDT2_DATE'], row['ACDT3_DATE']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import medication change date
+falls_df['MED1_DATE'] = pd.to_datetime(falls_df['med1_date'], errors='coerce').dt.date
+falls_df['MED2_DATE'] = pd.to_datetime(falls_df['med2_date'], errors='coerce').dt.date
+falls_df['MED3_DATE'] = pd.to_datetime(falls_df['med3_date'], errors='coerce').dt.date
+falls_df['MED4_DATE'] = pd.to_datetime(falls_df['med4_date'], errors='coerce').dt.date
+
+#combine accident dates into a single column
+falls_df['medication_dates'] = falls_df.apply(
+    lambda row: sorted(
+		[date for date in [row['MED1_DATE'], row['MED2_DATE'], row['MED3_DATE'], row['MED4_DATE']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import mood blue data "Have you felt downhearted or blue for three or more days in the past week?" 1: yes 2: no
+falls_df['mood_blue_date'] = falls_df.apply(
+	lambda row: row['start_date'] - pd.Timedelta(days=1) if row['MOOD_BLUE'] == 1 else pd.NaT, axis=1
+)
+
+#import mood lonely "In the past week I felt lonely." 1: yes 2: no
+falls_df['mood_lonely_date'] = falls_df.apply(
+    lambda row: row['start_date'] - pd.Timedelta(days=1) if row['MOOD_LONV'] == 1 else pd.NaT, axis=1
+)
 
 # -------- FEATURE ENGINEERING --------
 all_daily_data = []
@@ -156,7 +217,14 @@ mask_features = FEATURES + EMFIT_FEATURES  # Features to check for missingness
 
 # Identify subjects who have both gait and step data
 #subject_ids = set(gait_df['subid'].unique()).intersection(set(steps_df['subid']))
-subject_ids = subject_ids = clinical_df['sub_id'].dropna().unique()
+subject_ids = subject_ids = clinical_df['subid'].dropna().unique()
+
+# Filter demo_df to only relevant subjects before MOCA averaging
+demo_df = demo_df[demo_df['subid'].isin(subject_ids)]
+
+# Process MOCA scores: average per subject
+demo_df['moca_avg'] = demo_df.groupby('subid')['mocatots'].transform('mean')
+
 print(f"Number of subjects with gait data: {len(gait_df['subid'].unique())}")
 
 for subid in subject_ids:
@@ -164,6 +232,8 @@ for subid in subject_ids:
     gait_sub = gait_df[gait_df['subid'] == subid].copy()
     steps_sub = steps_df[steps_df['subid'] == subid].copy()
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
+    clinical_sub =  clinical_df[clinical_df['subid'] == subid].copy()
+    demo_sub = demo_df[demo_df['subid'] == subid].copy()
     subject_falls = falls_df[falls_df['subid'] == subid]
     
     #remove outliers from data
@@ -184,6 +254,15 @@ for subid in subject_ids:
     daily_df = daily_df.sort_values('date')
     
     original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
+    
+    	# Add clinical and demographic features
+    if not clinical_sub.empty:
+        for feat in CLINICAL_FEATURES:
+            daily_df[feat] = clinical_sub.iloc[0][feat]
+   
+    if not demo_sub.empty:
+        for feat in DEMO_FEATURES:
+            daily_df[feat] = demo_sub.iloc[0][feat]
     
     #---Compute % missing per festure before imputation
     total_days = len(original_daily_df)
@@ -263,19 +342,54 @@ for subid in subject_ids:
         daily_df[col + '_ma_7'] = daily_df[col].rolling(window=7, min_periods=1).mean()  # 7-day rolling mean
 
     # Prepare fall and hospital event dates
-    fall_dates = sorted(subject_falls['cutoff_dates'].dropna().tolist())
-    hospital_dates = sorted(subject_falls['hospital_visit'].dropna().tolist())
+    raw_fall_dates = list(chain.from_iterable([
+		subject_falls['fall1_date'].dropna().tolist(),
+		subject_falls['fall2_date'].dropna().tolist(),
+		subject_falls['fall3_date'].dropna().tolist()
+	]))
+    
+    fall_dates = sorted(set([pd.to_datetime(d).date() for d in raw_fall_dates]))
+
+    
+    hospital_dates = sorted(
+    list(chain.from_iterable(
+        [x for x in subject_falls['hospital_dates'] if isinstance(x, list) and x]
+    ))
+    )
+    mood_blue_dates = sorted(
+    [d.date() for d in subject_falls['mood_blue_date'].dropna()]
+    )
+    mood_lonely_dates = sorted(
+    [d.date() for d in subject_falls['mood_lonely_date'].dropna()]
+    )
+    
+    accident_dates = sorted(
+    list(chain.from_iterable(
+        [x for x in subject_falls['accident_dates'] if isinstance(x, list) and x]
+    ))
+)
+    medication_dates = sorted(
+    list(chain.from_iterable(
+        [x for x in subject_falls['medication_dates'] if isinstance(x, list) and x]
+    ))
+    )
 
     # Create temporal context features
     daily_df['days_since_fall'] = daily_df['date'].apply(lambda d: days_since_last_event(d, fall_dates))
-    daily_df['days_until_fall'] = daily_df['date'].apply(lambda d: days_until_next_event(d, fall_dates))
     daily_df['days_since_hospital'] = daily_df['date'].apply(lambda d: days_since_last_event(d, hospital_dates))
-    daily_df['days_until_hospital'] = daily_df['date'].apply(lambda d: days_until_next_event(d, hospital_dates))
+    daily_df['days_since_mood_blue'] = daily_df['date'].apply(lambda d: days_since_last_event(d, mood_blue_dates))
+    daily_df['days_since_mood_lonely'] = daily_df['date'].apply(lambda d: days_since_last_event(d, mood_lonely_dates))
+    daily_df['days_since_accident'] = daily_df['date'].apply(lambda d: days_since_last_event(d, accident_dates))
+    daily_df['days_since_medication'] = daily_df['date'].apply(lambda d: days_since_last_event(d, medication_dates))
 
     # Create event labels
     daily_df['label_fall'] = daily_df['date'].apply(lambda d: label_exact_day(d, fall_dates))
     daily_df['label_hospital'] = daily_df['date'].apply(lambda d: label_exact_day(d, hospital_dates))
-    daily_df['label'] = daily_df[['label_fall', 'label_hospital']].max(axis=1)  # Combined label
+    daily_df['label_mood_blue'] = daily_df['date'].apply(lambda d: label_exact_day(d, mood_blue_dates))
+    daily_df['label_mood_lonely'] = daily_df['date'].apply(lambda d: label_exact_day(d, mood_lonely_dates))
+    daily_df['label_accident'] = daily_df['date'].apply(lambda d: label_exact_day(d, accident_dates))
+    daily_df['label_medication'] = daily_df['date'].apply(lambda d: label_exact_day(d, medication_dates))
+    daily_df['label'] = daily_df[['label_fall', 'label_hospital', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']].max(axis=1)  # Combined label
 
     daily_df['subid'] = subid  # Add subject ID
     all_daily_data.append(daily_df.copy())
@@ -285,10 +399,27 @@ for subid in subject_ids:
     for feature in (FEATURES+EMFIT_FEATURES):
     	print(f"  {feature}: {missing_before[feature]} missing → {missing_after[feature]} missing")
 
-# -------- SAVE OUTPUT --------
+#----------REORDERING COLUMNS----------
 # Concatenate all subjects' data into one DataFrame
 print("Saving labeled daily data...")
 final_df = pd.concat(all_daily_data)
+
+# -------- REORDER COLUMNS --------
+temporal_cols = (
+    FEATURES + EMFIT_FEATURES +
+    [f"{f}_norm" for f in FEATURES + EMFIT_FEATURES] +
+    [f"{f}_delta" for f in FEATURES + EMFIT_FEATURES] +
+    [f"{f}_delta_1d" for f in FEATURES + EMFIT_FEATURES] +
+    [f"{f}_ma_7" for f in FEATURES + EMFIT_FEATURES]
+)
+
+final_df = final_df[
+    ['subid', 'date'] + temporal_cols + CLINICAL_FEATURES + DEMO_FEATURES +
+    ['days_since_fall',  'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely',
+     'label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']
+]
+
+# -------- SAVE OUTPUT --------
 
 # Save final engineered dataset to CSV
 csv_filename = f"labeled_daily_data_{imputation_method}.csv"

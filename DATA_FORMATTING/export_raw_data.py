@@ -15,6 +15,7 @@ import numpy as np
 import os
 from datetime import datetime
 import sys
+from itertools import chain
 
 # -------- CONFIG --------
 USE_WSL = True
@@ -54,7 +55,7 @@ CLINICAL_FEATURES = [
 ]    
 
 DEMO_FEATURES = [
-	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis'
+	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat'
 ]
 
 # -------- LOAD DATA --------
@@ -76,13 +77,60 @@ gait_df['gait_speed'] = gait_df['gait_speed'].mask(gait_df['gait_speed'] < 0, np
 steps_df['steps'] = steps_df['steps'].mask(steps_df['steps'] < 0, np.nan)
 
 falls_df['fall1_date'] = pd.to_datetime(falls_df['fall1_date'], errors='coerce')
+falls_df['fall2_date'] = pd.to_datetime(falls_df['fall2_date'], errors='coerce')
+falls_df['fall3_date'] = pd.to_datetime(falls_df['fall3_date'], errors='coerce')
 falls_df['start_date'] = pd.to_datetime(falls_df['StartDate'], errors='coerce')
 falls_df['cutoff_dates'] = falls_df.apply(
     lambda row: row['fall1_date'].date() if pd.notnull(row['fall1_date']) 
     else ((row['start_date'] - pd.Timedelta(days=1)).date() if row['FALL'] == 1 else pd.NaT),
     axis=1
 )
+
+#first hosptial visit date
 falls_df['hospital_visit'] = pd.to_datetime(falls_df['hcru1_date'], errors='coerce').dt.date
+falls_df['hospital_visit_2'] = pd.to_datetime(falls_df['hcru2_date'], errors='coerce').dt.date
+
+#combine hospital visit dates into a single column
+falls_df['hospital_dates'] = falls_df.apply(
+	lambda row: sorted(
+		[date for date in [row['hospital_visit'], row['hospital_visit_2']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import accident date
+falls_df['ACDT1_DATE'] = pd.to_datetime(falls_df['acdt1_date'], errors='coerce').dt.date
+falls_df['ACDT2_DATE'] = pd.to_datetime(falls_df['acdt2_date'], errors='coerce').dt.date
+falls_df['ACDT3_DATE'] = pd.to_datetime(falls_df['acdt3_date'], errors='coerce').dt.date
+
+#combine accident dates into a single column
+falls_df['accident_dates'] = falls_df.apply(
+	lambda row: sorted(
+		[date for date in [row['ACDT1_DATE'], row['ACDT2_DATE'], row['ACDT3_DATE']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import medication change date
+falls_df['MED1_DATE'] = pd.to_datetime(falls_df['med1_date'], errors='coerce').dt.date
+falls_df['MED2_DATE'] = pd.to_datetime(falls_df['med2_date'], errors='coerce').dt.date
+falls_df['MED3_DATE'] = pd.to_datetime(falls_df['med3_date'], errors='coerce').dt.date
+falls_df['MED4_DATE'] = pd.to_datetime(falls_df['med4_date'], errors='coerce').dt.date
+
+#combine accident dates into a single column
+falls_df['medication_dates'] = falls_df.apply(
+    lambda row: sorted(
+		[date for date in [row['MED1_DATE'], row['MED2_DATE'], row['MED3_DATE'], row['MED4_DATE']] if pd.notnull(date)]
+	), axis=1
+)
+
+#import mood blue data "Have you felt downhearted or blue for three or more days in the past week?" 1: yes 2: no
+falls_df['mood_blue_date'] = falls_df.apply(
+	lambda row: row['start_date'] - pd.Timedelta(days=1) if row['MOOD_BLUE'] == 1 else pd.NaT, axis=1
+)
+
+#import mood lonely "In the past week I felt lonely." 1: yes 2: no
+falls_df['mood_lonely_date'] = falls_df.apply(
+    lambda row: row['start_date'] - pd.Timedelta(days=1) if row['MOOD_LONV'] == 1 else pd.NaT, axis=1
+)
 
 #change amalyoid status to 1 and 0 if Positve chane to 1 and if negative change to 0
 clinical_df['amyloid'] = clinical_df['clinical amyloid (+/-) read'].replace({'Positive': 1, 'Negative': 0})
@@ -100,6 +148,13 @@ steps_df = preprocess_steps(steps_df)
 subject_ids = clinical_df['subid'].dropna().unique()
 all_subject_data = []
 
+
+# Filter demo_df to only relevant subjects before MOCA averaging
+demo_df = demo_df[demo_df['subid'].isin(subject_ids)]
+
+# Process MOCA scores: average per subject
+demo_df['moca_avg'] = demo_df.groupby('subid')['mocatots'].transform('mean')
+
 print(f"Found {len(subject_ids)} subjects with clinical data.")
 
 for subid in subject_ids:
@@ -110,7 +165,21 @@ for subid in subject_ids:
     demo_sub = demo_df[demo_df['subid'] == subid].copy()
     subject_falls = falls_df[falls_df['subid'] == subid]
     fall_dates = sorted(subject_falls['cutoff_dates'].dropna().tolist())
-    hospital_dates = sorted(subject_falls['hospital_visit'].dropna().tolist())
+    hospital_dates = sorted(
+    list(chain.from_iterable(subject_falls['hospital_dates'].dropna()))
+    )
+    mood_blue_dates = sorted(
+    [d.date() for d in subject_falls['mood_blue_date'].dropna()]
+    )
+    mood_lonely_dates = sorted(
+    [d.date() for d in subject_falls['mood_lonely_date'].dropna()]
+    )
+    accident_dates = sorted(
+    list(chain.from_iterable(subject_falls['accident_dates'].dropna()))
+    )
+    medication_dates = sorted(
+    list(chain.from_iterable(subject_falls['medication_dates'].dropna()))
+    )
 
     gait_sub = remove_outliers(gait_sub, 'gait_speed')
     steps_sub = remove_outliers(steps_sub, 'steps')
@@ -143,6 +212,7 @@ for subid in subject_ids:
             col + '_norm': (daily_df[col] - mean) / std if std else np.nan,
             col + '_delta': daily_df[col] - mean,
             col + '_delta_1d': daily_df[col].diff(),
+            # 7-day backward-looking moving average (includes partial windows for first 6 days)
             col + '_ma_7': daily_df[col].rolling(window=7, min_periods=1).mean()
         })
         feature_blocks.append(block)
@@ -153,13 +223,21 @@ for subid in subject_ids:
     # Add binary event labels
     daily_df['label_fall'] = daily_df['date'].apply(lambda d: label_exact_day(d, fall_dates))
     daily_df['label_hospital'] = daily_df['date'].apply(lambda d: label_exact_day(d, hospital_dates))
+    daily_df['label_mood_blue'] = daily_df['date'].apply(lambda d: label_exact_day(d, mood_blue_dates))
+    daily_df['label_mood_lonely'] = daily_df['date'].apply(lambda d: label_exact_day(d, mood_lonely_dates))
+    daily_df['label_accident'] = daily_df['date'].apply(lambda d: label_exact_day(d, accident_dates))
+    daily_df['label_medication'] = daily_df['date'].apply(lambda d: label_exact_day(d, medication_dates))
     daily_df['label'] = daily_df[['label_fall', 'label_hospital']].max(axis=1)
 
     # Add temporal context features
     daily_df['days_since_fall'] = daily_df['date'].apply(lambda d: days_since_last_event(d, fall_dates))
-    daily_df['days_until_fall'] = daily_df['date'].apply(lambda d: days_until_next_event(d, fall_dates))
+    #daily_df['days_until_fall'] = daily_df['date'].apply(lambda d: days_until_next_event(d, fall_dates))
     daily_df['days_since_hospital'] = daily_df['date'].apply(lambda d: days_since_last_event(d, hospital_dates))
-    daily_df['days_until_hospital'] = daily_df['date'].apply(lambda d: days_until_next_event(d, hospital_dates))
+    #daily_df['days_until_hospital'] = daily_df['date'].apply(lambda d: days_until_next_event(d, hospital_dates))
+    daily_df['days_since_mood_blue'] = daily_df['date'].apply(lambda d: days_since_last_event(d, mood_blue_dates))
+    daily_df['days_since_mood_lonely'] = daily_df['date'].apply(lambda d: days_since_last_event(d, mood_lonely_dates))
+    daily_df['days_since_accident'] = daily_df['date'].apply(lambda d: days_since_last_event(d, accident_dates))
+    daily_df['days_since_medication'] = daily_df['date'].apply(lambda d: days_since_last_event(d, medication_dates))
 
     daily_df['subid'] = subid
     all_subject_data.append(daily_df)

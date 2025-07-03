@@ -13,7 +13,7 @@ df <- read.csv(input_path)
 df$date <- as.Date(df$date)
 
 # -------- Define Features --------
-exclude_cols <- c("subid", "date")
+exclude_cols <- c("subid", "date", "label_fall", "label_hospital", "label")
 feature_cols <- setdiff(colnames(df), exclude_cols)
 
 # -------- Initialize Logs --------
