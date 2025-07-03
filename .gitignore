@@ -1,0 +1,10 @@
+# Ignore common clutter
+*.log
+*.Rhistory
+*.pyc
+__pycache__/
+OUTPUT/
+DETECT_DATA/
+*.ipynb_checkpoints
+wandb/
+MODELS/wandb/
