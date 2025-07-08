@@ -1,16 +1,17 @@
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from scipy.cluster.hierarchy import linkage, dendrogram
 
 base_path = '/mnt/d/DETECT'
 
 # Create output directory if it does not exist
-output_path = os.path.join(base_path, 'OUTPUT', 'KMeans_Clustering_Yearly')
+output_path = os.path.join(base_path, 'OUTPUT', 'Hierarchical_Clustering_Yearly')
 os.makedirs(output_path, exist_ok=True)
 plot_path = os.path.join(output_path, "plots")
 os.makedirs(plot_path, exist_ok=True)
@@ -106,61 +107,54 @@ for year, group in df_clean.groupby('year'):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
+    link_matrix = linkage(X_scaled, method='ward')
+    plt.figure(figsize=(12, 6))
+    dendrogram(
+		link_matrix,
+		truncate_mode='lastp',  # show only last p merged clusters
+		p=25,                   # number of leaf nodes to show
+		leaf_rotation=45.,
+		leaf_font_size=10.
+	)
+    plt.title(f"Dendrogram - {year}")
+    plt.xlabel("Sample index or (cluster size)")
+    plt.ylabel("Distance")
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_path, f"dendrogram_{year}.png"), dpi=300)
+    plt.close()
+    
     #PCA reduction before clustering
     pca = PCA(n_components=0.95)  # Keep 95% variance
     X_pca = pca.fit_transform(X_scaled)
     print(f"Year {year}: Reduced features from {X_scaled.shape[1]} to {X_pca.shape[1]} PCA components.")
-    
-    # Tune K using both Elbow (Inertia) and Silhouette Score
-    inertias = []
+
+    # Hierarchical Clustering and Silhouette Score
     sil_scores = []
     k_range = range(2, 11)
     best_k, best_sil_score = 2, -1
     for k in k_range:
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        labels = kmeans.fit_predict(X_scaled)
-        inertia = kmeans.inertia_
+        model = AgglomerativeClustering(n_clusters=k, linkage='ward')
+        labels = model.fit_predict(X_scaled)
         sil = silhouette_score(X_scaled, labels)
         
-        print(f"Year {year} - k={k} | Inertia: {inertia:.0f} | Silhouette: {sil:.3f}")
-        
-        #PCA KMeans calculation
-        kmeans_pca = KMeans(n_clusters=k, random_state=42)
-        labels_pca = kmeans_pca.fit_predict(X_pca)
-        inertia_pca = kmeans_pca.inertia_
+        print(f"Year {year} - k={k}| Silhouette: {sil:.3f}")
+
+        #PCA Hierarchical calculation
+        model_pca = AgglomerativeClustering(n_clusters=k, linkage='ward')
+        labels_pca = model_pca.fit_predict(X_pca)
         sil_pca = silhouette_score(X_pca, labels_pca)
-        print(f"Year {year} - k={k} | Inertia (PCA): {inertia_pca:.0f} | Silhouette (PCA): {sil_pca:.3f}")
-        
-        inertias.append(inertia)
+        print(f"Year {year} - k={k} | Silhouette (PCA): {sil_pca:.3f}")
+
         sil_scores.append(sil)
         
         if sil > best_sil_score:
             best_k, best_sil_score = k, sil
-
-	# Plot Elbow and Silhouette side by side
-    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-
-	# Elbow plot
-    axs[0].plot(k_range, inertias, marker='o')
-    axs[0].set_title(f'Elbow Method (Inertia) - {year}')
-    axs[0].set_xlabel('Number of Clusters (k)')
-    axs[0].set_ylabel('Inertia')
-
-	# Silhouette plot
-    axs[1].plot(k_range, sil_scores, marker='o', color='green')
-    axs[1].set_title(f'Silhouette Scores - {year}')
-    axs[1].set_xlabel('Number of Clusters (k)')
-    axs[1].set_ylabel('Silhouette Score')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(plot_path, f"elbow_silhouette_{year}.png"), dpi=300)
-    plt.close()
     
     print(f"Best k for year {year} based on silhouette: {best_k}")
 
     # Final clustering
-    kmeans = KMeans(n_clusters=best_k, random_state=42)
-    subgroup['cluster'] = kmeans.fit_predict(X_pca)
+    model = AgglomerativeClustering(n_clusters=best_k, linkage='ward')
+    subgroup['cluster'] = model.fit_predict(X_scaled)
     
     composition = subgroup.groupby('cluster')['amyloid'].value_counts(normalize=True).unstack().fillna(0)
     print(f"Amyloid composition in clusters for {year}:\n{composition}")
@@ -179,7 +173,7 @@ for year, group in df_clean.groupby('year'):
 
     # Refit + PCA
     X_scaled_filtered = scaler.fit_transform(subgroup[feature_cols])
-    subgroup['cluster'] = KMeans(n_clusters=len(valid_clusters), random_state=42).fit_predict(X_scaled_filtered)
+    subgroup['cluster'] = AgglomerativeClustering(n_clusters=len(valid_clusters), linkage='ward').fit_predict(X_scaled_filtered)
     pca = PCA(n_components=2).fit_transform(X_scaled_filtered)
     subgroup['pca1'], subgroup['pca2'] = pca[:, 0], pca[:, 1]
 
@@ -243,7 +237,7 @@ for year, group in df_clean.groupby('year'):
 
 # Combine and save
 final_df = pd.concat(yearly_clusters, ignore_index=True)
-final_df.to_csv(os.path.join(output_path, 'yearly_kmeans_clusters_all.csv'), index=False)
+final_df.to_csv(os.path.join(output_path, 'yearly_hierarchical_clusters_all.csv'), index=False)
 pd.DataFrame(metrics).to_csv(os.path.join(output_path, 'clustering_metrics_all.csv'), index=False)
 
 composition.to_csv(os.path.join(output_path, f"amyloid_composition_year_{year}.csv"))

@@ -29,6 +29,29 @@ df_clean['age'] = df_clean['date'].dt.year - df_clean['birthyr']
 #encode sex as numeric
 df_clean['sex_encoded'] = df_clean['sex'].map({1: 1, 2: 0})
 
+#encode cognitive status as numeric
+cogstat_map = {
+    1: 0,  # Better than normal
+    2: 1,  # Normal
+    3: 2,  # One or two abnormal scores
+    4: 3,  # Three or more abnormal scores
+    0: -1  # Unable to render opinion
+}
+
+df_clean['cogstat_encoded'] = df_clean['cogstat'].map(cogstat_map)
+
+df_clean['hispanic_encoded'] = df_clean['hispanic'].fillna(0).astype(int)
+df_clean['race_encoded'] = df_clean['race'].fillna(-1).astype(int)
+df_clean['educ_encoded'] = df_clean['educ'].fillna(-1).astype(int)
+df_clean['independ_encoded'] = df_clean['independ'].fillna(-1).astype(int)
+df_clean['residenc_encoded'] = df_clean['residenc'].fillna(-1).astype(int)
+df_clean['livsitua_encoded'] = df_clean['livsitua'].fillna(-1).astype(int)
+df_clean['maristat_encoded'] = df_clean['maristat'].fillna(-1).astype(int)
+df_clean['moca_avg'] = df_clean['moca_avg'].fillna(df_clean['moca_avg'].mean())
+
+#encode alzheimers disease status
+df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)  # Fill NaN with 0 and convert to int
+
 # Define feature and demographic columns
 feature_cols = [
     'steps', 'gait_speed', 'awakenings', 'bedexitcount', #'end_sleep_time',
@@ -36,11 +59,13 @@ feature_cols = [
     'waso', 'hrvscore', #'start_sleep_time', 'time_to_sleep',
      'tossnturncount', 'maxhr', 'avghr', 'avgrr', #'time_in_bed_after_sleep',
     #include demographic features
-    'age', 'sex_encoded'
+    'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
+    'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
+    'livsitua_encoded', 'maristat_encoded', 'moca_avg'
 ]
 
-#drop rows with NaN in feature columns or date
-df_clean = df_clean.dropna(subset=feature_cols + ['date']).copy()
+#fill NaN values in feature columns with the mean of each column
+df_clean[feature_cols] = df_clean[feature_cols].fillna(df_clean[feature_cols].mean())
 
 #remove rows with negative values in features
 df_clean = df_clean[(df_clean[feature_cols] >= 0).all(axis=1)].copy()
@@ -67,15 +92,22 @@ for month, group in df_clean.groupby('month'):
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         
+        #PCA reduction before clustering
+        pca = PCA(n_components=0.95)  # Keep 95% variance
+        X_pca = pca.fit_transform(X_scaled)
+        print(f"Month {month}: Reduced features from {X_scaled.shape[1]} to {X_pca.shape[1]} PCA components.")
+
         best_k = 2  # Reset best_k for each month
         best_sil_score = -1  # Reset best silhouette score for each month
         for k in range(2, 6):
             kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(X_scaled)
+            labels_pca = kmeans.fit_predict(X_pca)
             sil_score = silhouette_score(X_scaled, labels)
+            sil_score_pca = silhouette_score(X_pca, labels_pca)
             ch_score = calinski_harabasz_score(X_scaled, labels)
             db = davies_bouldin_score(X_scaled, labels)
-            print(f"Month {month} - k={k:<2} | Silhouette Score: {sil_score:.3f}")
+            print(f"Month {month} - k={k:<2} | Silhouette Score: {sil_score:.3f} | Silhouette (PCA): {sil_score_pca:.3f}")
             if sil_score > best_sil_score:
                 best_k = k
                 best_sil_score = sil_score
@@ -170,6 +202,14 @@ print(f"Cluster summary saved to {summary_file}")
 
 sizes = df_monthly_clusters.groupby(['month', 'amyloid_status', 'cluster']).size().unstack(fill_value=0)
 print(sizes)
+
+#feature averages by cluster and month
+agg_df = df_monthly_clusters.groupby(['month', 'cluster'])[feature_cols].mean().round(2)
+print(agg_df)
+# Save aggregated DataFrame to CSV
+agg_file = os.path.join(output_path, 'monthly_aggregated_clusters.csv')
+agg_df.to_csv(agg_file)
+print(f"Aggregated cluster data saved to {agg_file}")
 
 # Plot cluster counts by month
 plt.figure(figsize=(12, 6))

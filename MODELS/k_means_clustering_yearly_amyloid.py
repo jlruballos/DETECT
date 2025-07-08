@@ -34,14 +34,38 @@ df_clean['age'] = df_clean['date'].dt.year - df_clean['birthyr']
 #encode sex as numeric
 df_clean['sex_encoded'] = df_clean['sex'].map({1: 1, 2: 0})
 
+# Encode cognitive status using mapping
+cogstat_map = {
+    1: 0,  # Better than normal
+    2: 1,  # Normal
+    3: 2,  # One or two abnormal scores
+    4: 3,  # Three or more abnormal scores
+    0: -1  # Unable to render opinion
+}
+df_clean['cogstat_encoded'] = df_clean['cogstat'].map(cogstat_map)
+
+# Encode and fill other demographics
+df_clean['hispanic_encoded'] = df_clean['hispanic'].fillna(0).astype(int)
+df_clean['race_encoded'] = df_clean['race'].fillna(-1).astype(int)
+df_clean['educ_encoded'] = df_clean['educ'].fillna(-1).astype(int)
+df_clean['independ_encoded'] = df_clean['independ'].fillna(-1).astype(int)
+df_clean['residenc_encoded'] = df_clean['residenc'].fillna(-1).astype(int)
+df_clean['livsitua_encoded'] = df_clean['livsitua'].fillna(-1).astype(int)
+df_clean['maristat_encoded'] = df_clean['maristat'].fillna(-1).astype(int)
+df_clean['moca_avg'] = df_clean['moca_avg'].fillna(df_clean['moca_avg'].mean())
+df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)
+
+
 # Define feature and demographic columns
 feature_cols = [
-    'steps', 'awakenings', 'bedexitcount', #'end_sleep_time', #'gait_speed',
+    'steps', 'awakenings', 'bedexitcount', 'end_sleep_time', 'gait_speed',
      'durationinsleep', 'inbed_time', 'outbed_time', 'durationawake', 'sleepscore',
     'waso', 'hrvscore', #'start_sleep_time', #'time_to_sleep',
      'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep',
     #include demographic features
-    'age', 'sex_encoded'
+    'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
+    'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
+    'livsitua_encoded', 'maristat_encoded', 'moca_avg'
 ]
 
 #drop rows with NaN in feature columns or date
@@ -76,15 +100,22 @@ for year, group in df_clean.groupby('year'):
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         
+        pca = PCA(n_components=0.95)
+        X_pca = pca.fit_transform(X_scaled)
+        
+        print(f"Year {year}: Reduced features from {X_scaled.shape[1]} to {X_pca.shape[1]} PCA components.")
+        
         best_k = 2  # Reset best_k for each month
         best_sil_score = -1  # Reset best silhouette score for each month
         for k in range(2, 6):
             kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(X_scaled)
+            labels_pca = kmeans.fit_predict(X_pca)
             sil_score = silhouette_score(X_scaled, labels)
+            sil_score_pca = silhouette_score(X_pca, labels_pca)
             ch_score = calinski_harabasz_score(X_scaled, labels)
             db = davies_bouldin_score(X_scaled, labels)
-            print(f"Year {year} - k={k:<2} | Silhouette Score: {sil_score:.3f}")
+            print(f"Year {year} - k={k:<2} | Silhouette Score: {sil_score:.3f} | Silhouette (PCA): {sil_score_pca:.3f}")
             if sil_score > best_sil_score:
                 best_k = k
                 best_sil_score = sil_score
