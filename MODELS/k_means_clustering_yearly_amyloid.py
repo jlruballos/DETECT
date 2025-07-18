@@ -60,12 +60,13 @@ df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)
 feature_cols = [
     'steps', 'awakenings', 'bedexitcount', 'end_sleep_time', 'gait_speed',
      'durationinsleep', 'inbed_time', 'outbed_time', 'durationawake', 'sleepscore',
-    'waso', 'hrvscore', #'start_sleep_time', #'time_to_sleep',
-     'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep',
+    'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
+     'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep', 'Night_Bathroom_Visits', 'Night_Kitchen_Visits',
+     'label_fall', 'label_hospital', 'label_accident',
     #include demographic features
-    'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
-    'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
-    'livsitua_encoded', 'maristat_encoded', 'moca_avg'
+    # 'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
+    # 'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
+    # 'livsitua_encoded', 'maristat_encoded', 'moca_avg'
 ]
 
 #drop rows with NaN in feature columns or date
@@ -87,9 +88,17 @@ df_clean['year'] = df_clean['date'].dt.year  # Add year column
 yearly_clusters = []
 metrics = []
 
+#print initial amyloid participants
+print(f"Initial amyloid-positive participants: {len(initial_amyloid_pos)}")
+
 for year, group in df_clean.groupby('year'):
     for status in [0,1]: #0 = negative, 1 = positive
-        subgroup = group[group['amyloid'] == status].dropna(subset=feature_cols).copy()
+        #subgroup = group[group['amyloid'] == status].dropna(subset=feature_cols).copy()
+        subgroup = group[group['amyloid'] == status].copy()
+        #print inital amyloid participants
+        if status == 1:
+            print(f"Year {year} - Initial amyloid-positive participants: {len(subgroup['subid'].unique())}")
+   
         if subgroup.empty:
             print(f"Skipping year {year} for amyloid status {status} - no data available.")
             continue
@@ -107,7 +116,7 @@ for year, group in df_clean.groupby('year'):
         
         best_k = 2  # Reset best_k for each month
         best_sil_score = -1  # Reset best silhouette score for each month
-        for k in range(2, 6):
+        for k in range(3, 20):
             kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(X_scaled)
             labels_pca = kmeans.fit_predict(X_pca)
@@ -115,10 +124,12 @@ for year, group in df_clean.groupby('year'):
             sil_score_pca = silhouette_score(X_pca, labels_pca)
             ch_score = calinski_harabasz_score(X_scaled, labels)
             db = davies_bouldin_score(X_scaled, labels)
-            print(f"Year {year} - k={k:<2} | Silhouette Score: {sil_score:.3f} | Silhouette (PCA): {sil_score_pca:.3f}")
-            if sil_score > best_sil_score:
+            ch_score_pca = calinski_harabasz_score(X_pca, labels_pca)
+            db_pca = davies_bouldin_score(X_pca, labels_pca)
+            print(f"Year {year} - k={k:<2} | Silhouette Score: {sil_score:.3f} | Silhouette (PCA): {sil_score_pca:.3f} | Calinski-Harabasz: {ch_score:.3f} | Calinski-Harabasz (PCA): {ch_score_pca:.3f} | Davies-Bouldin: {db:.3f} | Davies-Bouldin (PCA): {db_pca:.3f}")
+            if sil_score_pca > best_sil_score:
                 best_k = k
-                best_sil_score = sil_score
+                best_sil_score = sil_score_pca
 
         print(f"Best k for year {year}: {best_k} with Silhouette Score: {best_sil_score:.3f}")
 		
@@ -128,41 +139,26 @@ for year, group in df_clean.groupby('year'):
         subgroup['n_clusters'] = best_k  # Store the number of clusters used
         subgroup['silhouette_score'] = best_sil_score
         
-        # Filter clusters with fewer than 2 unique participants
-        participant_counts = subgroup.groupby('cluster')['subid'].nunique()
-        valid_clusters = participant_counts[participant_counts >= 2].index
-        subgroup = subgroup[subgroup['cluster'].isin(valid_clusters)].copy()
-    
-
-        if subgroup.empty:
-           print(f"⚠️ All clusters in year {year}, amyloid {status} had fewer than 2 unique participants — skipping.")
-           continue
-       
-        # Re-standardize features *after* filtering
-        X_filtered = subgroup[feature_cols]
-        X_scaled_filtered = scaler.fit_transform(X_filtered)
-        
-        # Re-run KMeans on cleaned data
-        kmeans_filtered = KMeans(n_clusters=len(valid_clusters), random_state=42)
-        subgroup['cluster'] = kmeans_filtered.fit_predict(X_scaled_filtered)
-        
         unique_labels = subgroup['cluster'].nunique()
 
         if unique_labels > 1:
-           sil_score = silhouette_score(X_scaled_filtered, subgroup['cluster'])
-           ch_score = calinski_harabasz_score(X_scaled_filtered, subgroup['cluster'])
-           db = davies_bouldin_score(X_scaled_filtered, subgroup['cluster'])
+           sil_score = silhouette_score(X_scaled, subgroup['cluster'])
+           ch_score = calinski_harabasz_score(X_scaled, subgroup['cluster'])
+           db = davies_bouldin_score(X_scaled, subgroup['cluster'])
         else:
            sil_score = ch_score = db = None
-           print(f"⚠️ Skipping metrics for year {year}, amyloid {status} — only 1 cluster remains after filtering.")
+           print(f"⚠️ Skipping metrics for year {year}, amyloid {status} — only 1 cluster remains.")
            
         # Run PCA
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_scaled_filtered)
-        subgroup['pca1'] = X_pca[:, 0]
-        subgroup['pca2'] = X_pca[:, 1]
+        pca_plot = PCA(n_components=2)
+        X_pca_plot = pca_plot.fit_transform(X_scaled)
+        subgroup['pca1'] = X_pca_plot[:, 0]
+        subgroup['pca2'] = X_pca_plot[:, 1]
 
         subgroup['amyloid_status'] = status
+        
+        #unique participants in each cluster
+        participant_counts = subgroup.groupby('cluster')['subid'].nunique()
 
         metrics.append({
         'year': str(year),
@@ -175,7 +171,7 @@ for year, group in df_clean.groupby('year'):
         'min_participants_in_cluster': participant_counts.min(),
         'max_participants_in_cluster': participant_counts.max(),
         'cluster_sizes': participant_counts.to_dict(),
-        'n_clusters_final': len(valid_clusters),
+        'n_clusters_final': len(subgroup['cluster'].unique()),
         'total_days': len(subgroup),
         'unique_participants': subgroup['subid'].nunique()
 

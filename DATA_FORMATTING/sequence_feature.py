@@ -34,6 +34,8 @@ import os
 from datetime import datetime
 import sys
 from itertools import chain
+from scipy.stats import circmean
+import matplotlib.pyplot as plt
 
 # -------- CONFIG --------
 USE_WSL = True  # Set to True if running inside WSL (Linux on Windows)
@@ -73,6 +75,11 @@ variant = 'encoder + decoder mask'
 
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)  # Create output directory if it does not exist
+
+# Create output directory for sleep time plots
+sleep_plot_dir = os.path.join(output_path, 'diagnostics', 'sleep_time_plots')
+os.makedirs(sleep_plot_dir, exist_ok=True)
+
 print(f"Output directory created at: {output_path}")
 
 # File paths for datasets
@@ -83,6 +90,7 @@ FALLS_PATH = os.path.join(base_path, 'DETECT_Data', 'HUF', 'kaye_365_huf_detect.
 EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
 CLINICAL_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'DETECT-AD_Enrolled_Amyloid Status_PET_SUVR_QUEST_CENTILOID_20250116.xlsx')
 DEMO_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
+ACTIVITY_PATH = os.path.join(base_path, 'DETECT_Data', 'Processed_NYCE_Data', 'daily_area_hours_combined_output.csv')
 
 # -------- LOAD DATA --------
 print("Loading data...")
@@ -94,6 +102,7 @@ falls_df = pd.read_csv(FALLS_PATH, low_memory=False)
 emfit_df = pd.read_csv(EMFIT_PATH)
 clinical_df = pd.read_excel(CLINICAL_PATH)
 demo_df = pd.read_csv(DEMO_PATH)
+activity_df = pd.read_csv(ACTIVITY_PATH)
 
 #--------RENAME COLUMNS --------
 demo_df = demo_df.rename(columns={'record_id': 'subid'})
@@ -113,13 +122,16 @@ FEATURES = [
 ]
 
 EMFIT_FEATURES = [
-       'awakenings', 'bedexitcount', 'end_sleep_time', 
+       'awakenings', 'bedexitcount', 
     'inbed_time', 'outbed_time', 'sleepscore', 
     'durationinsleep', 'durationawake', 'waso', 
-    'hrvscore', 'start_sleep_time', 'time_to_sleep', 
+    'hrvscore', 'time_to_sleep', 
     'time_in_bed_after_sleep', 'total_time_in_bed', 'tossnturncount', 
     'sleep_period', 'minhr', 'maxhr', 
-    'avghr', 'avgrr', 'maxrr', 'minrr'
+    'avghr', 'avgrr', 'maxrr', 'minrr',
+    
+    #start and end sleep times have been converted to sin and cosine for easier imputation
+    'start_sleep_time_sin', 'start_sleep_time_cos', 'end_sleep_time_sin', 'end_sleep_time_cos'
 ]
 
 CLINICAL_FEATURES = [
@@ -128,6 +140,10 @@ CLINICAL_FEATURES = [
 
 DEMO_FEATURES = [
 	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat'
+]
+#visits are for night time activity 9pm - 6am
+ACTIVITY_FEATURES = [
+	'Night_Bathroom_Visits', 'Night_Kitchen_Visits'
 ]
 
 # -------- PREPROCESS --------
@@ -213,11 +229,11 @@ missingness_records = []
 
 #mask_features = ['gait_speed', 'daily_steps']  # Features to check for missingness
 
-mask_features = FEATURES + EMFIT_FEATURES  # Features to check for missingness
+mask_features = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES  # Features to check for missingness
 
 # Identify subjects who have both gait and step data
 #subject_ids = set(gait_df['subid'].unique()).intersection(set(steps_df['subid']))
-subject_ids = subject_ids = clinical_df['subid'].dropna().unique()
+subject_ids = clinical_df['subid'].dropna().unique()
 
 # Filter demo_df to only relevant subjects before MOCA averaging
 demo_df = demo_df[demo_df['subid'].isin(subject_ids)]
@@ -227,12 +243,17 @@ demo_df['moca_avg'] = demo_df.groupby('subid')['mocatots'].transform('mean')
 
 print(f"Number of subjects with gait data: {len(gait_df['subid'].unique())}")
 
+# Create output directory for raw data before imputation
+raw_output_path = os.path.join(output_path, 'raw_before_imputation')
+os.makedirs(raw_output_path, exist_ok=True)
+    
 for subid in subject_ids:
     # Extract data for each subject
     gait_sub = gait_df[gait_df['subid'] == subid].copy()
     steps_sub = steps_df[steps_df['subid'] == subid].copy()
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
     clinical_sub =  clinical_df[clinical_df['subid'] == subid].copy()
+    activity_sub = activity_df[activity_df['subid'] == subid].copy()
     demo_sub = demo_df[demo_df['subid'] == subid].copy()
     subject_falls = falls_df[falls_df['subid'] == subid]
     
@@ -255,6 +276,20 @@ for subid in subject_ids:
     
     original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
     
+    # Save raw daily data before imputation (for debugging or audit)
+    daily_df.to_csv(os.path.join(raw_output_path, f"{subid}_raw_before_imputation.csv"), index=False)
+    print(f"Raw data for subject {subid} saved to {raw_output_path}")
+    
+    if not activity_sub.empty:
+        activity_sub['date'] = pd.to_datetime(activity_sub['Date']).dt.date
+        daily_df = pd.merge(daily_df, activity_sub[['date'] + ACTIVITY_FEATURES], on='date', how='outer')
+    else:
+        print(f"No activity data for subject {subid}, skipping activity features.")
+        for feat in ACTIVITY_FEATURES:
+            daily_df[feat] = np.nan
+    
+    original_daily_df = daily_df.copy()
+    
     	# Add clinical and demographic features
     if not clinical_sub.empty:
         for feat in CLINICAL_FEATURES:
@@ -267,8 +302,8 @@ for subid in subject_ids:
     #---Compute % missing per festure before imputation
     total_days = len(original_daily_df)
     missing_pct_columns = {}
-    
-    for feat in FEATURES+EMFIT_FEATURES:
+
+    for feat in FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES:
         missing_count = original_daily_df[feat].isna().sum()
         missing_pct = round((missing_count / total_days) * 100, 2) if total_days > 0 else np.nan
         missing_pct_columns[f"{feat}_missing_pct"] = missing_pct
@@ -279,30 +314,89 @@ for subid in subject_ids:
     
     #count missing values before imputation
     #missing_before = daily_df[['gait_speed', 'daily_steps']].isna().sum()
-    missing_before = daily_df[FEATURES+EMFIT_FEATURES].isna().sum()
-    
+    missing_before = daily_df[FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES].isna().sum()
+
     #create missingness mask
     missingness_mask = daily_df[mask_features].isna().astype(int) ## 1 for missing, 0 for not missing
     missingness_mask.columns = [col +'_mask' for col in missingness_mask.columns] #rename columns to avoid confusion
     
     if imputation_method == 'vae':
         # Use VAE imputer for missing data
-        daily_df = impute_subject_data(daily_df, input_columns=FEATURES+EMFIT_FEATURES, epochs=30, variant=variant)
+        daily_df = impute_subject_data(daily_df, input_columns=FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES, epochs=30, variant=variant)
     else:
 		# Fill missing values with specified method
-        daily_df = impute_missing_data(daily_df, columns=FEATURES+EMFIT_FEATURES, method=imputation_method, multivariate=False)
-    
+        daily_df = impute_missing_data(daily_df, columns=FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES, method=imputation_method, multivariate=False)
+
+	# Inverse circular encoding for start and end sleep times
+    if imputation_method == 'mean':
+        for prefix in ['start_sleep_time', 'end_sleep_time']:
+            sin_col = f"{prefix}_sin"
+            cos_col = f"{prefix}_cos"
+            if sin_col in daily_df.columns and cos_col in daily_df.columns:
+                
+                # Calculate circular mean for start and end sleep times
+				# Drop NaN values for sin/cos columns
+                valid = daily_df[[sin_col, cos_col]].dropna()
+				# 👉 Use circular mean:
+                angles = np.arctan2(
+					daily_df[sin_col], daily_df[cos_col]
+				)
+                circ_mean = np.arctan2(np.nanmean(np.sin(angles)), np.nanmean(np.cos(angles)))
+
+				# Convert back to sin/cos
+                sin_mean = np.sin(circ_mean)
+                cos_mean = np.cos(circ_mean)
+
+				# Fill missing sin/cos consistently
+                missing_mask = daily_df[[sin_col, cos_col]].isna().any(axis=1)
+                daily_df.loc[missing_mask, sin_col] = sin_mean
+                daily_df.loc[missing_mask, cos_col] = cos_mean
+                
+                # Quick check
+                valid = daily_df[[sin_col, cos_col]].dropna()
+                observed_angles = np.arctan2(valid[sin_col], valid[cos_col])
+                print(f"{prefix} circmean (hours): {(circmean(observed_angles, high=2*np.pi) * 24 / (2*np.pi)):.2f}")
+
+	# Inverse circular encoding to recover hour values from sin/cos
+    for prefix in ['start_sleep_time', 'end_sleep_time']:
+        sin_col = f'{prefix}_sin'
+        cos_col = f'{prefix}_cos'
+        recon_col = prefix  # Save as original name again
+
+		# Only reconstruct if both components are present (and not all missing)
+        if sin_col in daily_df.columns and cos_col in daily_df.columns:
+            daily_df[recon_col] = (
+				np.arctan2(daily_df[sin_col], daily_df[cos_col]) * 24 / (2 * np.pi)
+			) % 24
+            
+        # Plot and save histograms for imputed sleep times
+        if GENERATE_HISTO:
+            for sleep_col in ['start_sleep_time', 'end_sleep_time']:
+                if sleep_col in daily_df.columns:
+                    plt.figure()
+                    daily_df[sleep_col].hist(bins=24)
+                    plt.title(f"{subid} - Imputed {sleep_col.replace('_', ' ').title()}")
+                    plt.xlabel("Hour of Day")
+                    plt.ylabel("Frequency")
+                    plt.grid(True)
+                    plt.tight_layout()
+
+					# Save to file
+                    plot_path = os.path.join(sleep_plot_dir, f"{subid}_{sleep_col}.png")
+                    plt.savefig(plot_path)
+                    plt.close()
+
     #add missingness mask to daily_df
     daily_df = pd.concat([daily_df, missingness_mask], axis=1)
     
     #count missing values after imputation
-    missing_after = daily_df[FEATURES+EMFIT_FEATURES].isna().sum()
-    
+    missing_after = daily_df[FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES].isna().sum()
+
      #Save missingness info to list
     missingness_record = track_missingness(
         original_df=original_daily_df,
         imputed_df=daily_df,
-        columns=FEATURES+EMFIT_FEATURES,
+        columns=FEATURES+EMFIT_FEATURES + ACTIVITY_FEATURES,
         subid=subid,
         imputation_method=imputation_method
     )
@@ -314,7 +408,7 @@ for subid in subject_ids:
         plot_imp_diag_histo(
 			original_df = original_daily_df,
 			imputed_df = daily_df,
-			columns = FEATURES+EMFIT_FEATURES,
+			columns = FEATURES+EMFIT_FEATURES + ACTIVITY_FEATURES,
 			subid = subid,
 			output_dir = diagnostic_output_path,
 			method_name = imputation_method
@@ -325,21 +419,25 @@ for subid in subject_ids:
         plot_imp_diag_timeseries(
 			original_df = original_daily_df,
 			imputed_df = daily_df,
-			columns = FEATURES+EMFIT_FEATURES,
+			columns = FEATURES+EMFIT_FEATURES + ACTIVITY_FEATURES,
 			subid = subid,
 			output_dir = diagnostic_output_path,
 			method_name = imputation_method
 		)
     
     # Create engineered features for gait and steps
-    for col in (FEATURES+EMFIT_FEATURES):
-        daily_df[col] = pd.to_numeric(daily_df[col], errors='coerce')
+    engineered_cols = {}
+    for col in (FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES):
         mean = daily_df[col].mean()
         std = daily_df[col].std()
-        daily_df[col + '_norm'] = (daily_df[col] - mean) / std  # Normalized feature
-        daily_df[col + '_delta'] = daily_df[col] - mean  # Difference from mean
-        daily_df[col + '_delta_1d'] = daily_df[col].diff()  # Day-to-day difference
-        daily_df[col + '_ma_7'] = daily_df[col].rolling(window=7, min_periods=1).mean()  # 7-day rolling mean
+        engineered_cols[col + '_norm'] = (daily_df[col] - mean) / std
+        engineered_cols[col + '_delta'] = daily_df[col] - mean
+        engineered_cols[col + '_delta_1d'] = daily_df[col].diff()
+        engineered_cols[col + '_ma_7'] = daily_df[col].rolling(window=7, min_periods=1).mean()
+    
+    daily_df = pd.concat([daily_df, pd.DataFrame(engineered_cols)], axis=1)
+    
+    daily_df = daily_df.copy()
 
     # Prepare fall and hospital event dates
     raw_fall_dates = list(chain.from_iterable([
@@ -396,7 +494,7 @@ for subid in subject_ids:
     
     # Print imputation report
     print(f"Subject {subid} - Imputation report ({imputation_method}):")
-    for feature in (FEATURES+EMFIT_FEATURES):
+    for feature in (FEATURES+EMFIT_FEATURES+ ACTIVITY_FEATURES):
     	print(f"  {feature}: {missing_before[feature]} missing → {missing_after[feature]} missing")
 
 #----------REORDERING COLUMNS----------
@@ -406,17 +504,26 @@ final_df = pd.concat(all_daily_data)
 
 # -------- REORDER COLUMNS --------
 temporal_cols = (
-    FEATURES + EMFIT_FEATURES +
-    [f"{f}_norm" for f in FEATURES + EMFIT_FEATURES] +
-    [f"{f}_delta" for f in FEATURES + EMFIT_FEATURES] +
-    [f"{f}_delta_1d" for f in FEATURES + EMFIT_FEATURES] +
-    [f"{f}_ma_7" for f in FEATURES + EMFIT_FEATURES]
+    FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES +
+    [f"{f}_norm" for f in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES] +
+    [f"{f}_delta" for f in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES] +
+    [f"{f}_delta_1d" for f in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES] +
+    [f"{f}_ma_7" for f in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES]
 )
+
+# Remove sine/cosine columns explicitly if present
+temporal_cols = [col for col in temporal_cols if col not in [
+    'start_sleep_time_sin', 'start_sleep_time_cos',
+    'end_sleep_time_sin', 'end_sleep_time_cos'
+]]
+
+#make sure to add the converted start and end sleep times
+temporal_cols += ['start_sleep_time', 'end_sleep_time']
 
 final_df = final_df[
     ['subid', 'date'] + temporal_cols + CLINICAL_FEATURES + DEMO_FEATURES +
-    ['days_since_fall',  'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely',
-     'label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']
+    ['days_since_fall',  'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely', 'days_since_accident', 'days_since_medication'] +
+     ['label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']
 ]
 
 # -------- SAVE OUTPUT --------

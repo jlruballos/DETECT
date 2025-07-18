@@ -5,13 +5,17 @@
 # Load libraries
 library(tidyverse)
 library(reReg)
+library(reda) 
 
 # Load dataset
-df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_accident.csv")
+df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_medication.csv")
+
+event_label <- "Medication"  # Change this to match the current event type
 
 # Factorize key variables
 df$sex <- factor(df$sex)
-df$amyloid <- factor(df$amyloid, labels = c("negative", "positive"))
+#df$amyloid <- factor(df$amyloid, labels = c("negative", "positive"))
+df$amyloid <- factor(df$amyloid)
 df$hispanic <- factor(df$hispanic)
 #df$age <- factor(df$age)
 df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
@@ -56,6 +60,8 @@ run_model <- function(df, feature_suffix, label) {
   # Drop rows with NA in any relevant covariates
   temp_df <- df %>% drop_na(all_of(covars))
   
+  cat("  → Rows used in model:", nrow(temp_df), "\n")
+  
   # # Drop factor columns with only 1 level
   factor_covars <- covars[sapply(temp_df[covars], is.factor)]
   single_level_factors <- factor_covars[sapply(temp_df[factor_covars], function(x) length(unique(x)) <= 1)]
@@ -76,7 +82,7 @@ run_model <- function(df, feature_suffix, label) {
     formula = model_formula,
     data = temp_df,
     model = "cox",
-    B = 200,
+    B = 500,
     se = "boot"
   )
   
@@ -95,6 +101,8 @@ mod_mean  <- run_model(df, "_interval_mean",  "Interval Mean Features")
 mod_roll  <- run_model(df, "_ma7_last",       "Rolling Mean (7-day) Features")
 mod_delta <- run_model(df, "_delta",          "Delta Features")
 
+
+
 # Define extraction function
 extract_summary <- function(model, model_name) {
   s <- summary(model)
@@ -111,8 +119,11 @@ summary_mean   <- extract_summary(mod_mean, "Interval Mean")
 summary_roll   <- extract_summary(mod_roll, "Rolling Mean")
 summary_delta  <- extract_summary(mod_delta, "Delta")
 
+mod_counts     <- run_model(df, "_total", "Total Count Features")
+summary_counts <- extract_summary(mod_counts, "Total Counts")
+
 # --- Combine all into one table ---
-all_summaries <- bind_rows(summary_mean, summary_roll, summary_delta)
+all_summaries <- bind_rows(summary_mean, summary_roll, summary_delta, summary_counts)
 
 # Add hazard ratio column
 all_summaries <- all_summaries %>%
@@ -131,13 +142,25 @@ print(
     print(n = Inf)
   
 )
+
+output_path <- paste0("D:/DETECT/OUTPUT/R_Output/recurrent_model_summary_", event_label, ".csv")
+
+dir.create(dirname(output_path), showWarnings = FALSE, recursive = TRUE)
+
+write_csv(
+  all_summaries %>%
+    select(model, variable, hazard_ratio, p_value),
+  output_path
+)
+
+cat("✅ CSV written to:", output_path, "\n")
+
 library(ggplot2)
 
 print(
   all_summaries %>%
-  mutate(hr = exp(estimate)) %>%
   filter(p_value < 0.1) %>%
-  ggplot(aes(x = reorder(variable, hr), y = hr, fill = model)) +
+  ggplot(aes(x = reorder(variable, hazard_ratio), y = hazard_ratio, fill = model)) +
   geom_bar(stat = "identity", position = "dodge") +
   coord_flip() +
   labs(title = "Hazard Ratios (HR < 0.1)", y = "HR", x = "") +
@@ -150,11 +173,21 @@ print(
   plotEvents(
     Recur(tstop, id, status) ~ amyloid,
     data = plot_df,
-    recurrent.name = "Hospital Visits",
+    recurrent.name = event_label,
     xlab = "Days Since Start",
-    main = "Recurrent Hospital Visits by Sex and Amyloid Status",
-    col.recurrent = "forestgreen",
-    col.terminal = "red",
+    main = "Recurrent by Amyloid Status",
+    col.recurrent = "dodgerblue",
     legend = TRUE
   )
 )
+
+# Plot baseline rate function for the mean model
+print(plotRate(mod_mean))
+
+# Plot cumulative sample mean function by amyloid status
+# Cumulative sample mean plot by amyloid
+print(
+  plot(Recur(tstop, id, status) ~ amyloid, data = plot_df, CSM = TRUE)
+)
+
+

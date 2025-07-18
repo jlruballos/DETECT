@@ -4,7 +4,9 @@ import pandas as pd
 df = pd.read_csv("/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_mean.csv", parse_dates=["date"])
 #df = pd.read_csv("/mnt/d/DETECT/OUTPUT/raw_export_for_r/imputed_detect_data_pmm_per_participant.csv", parse_dates=["date"])
 
-label = 'label_medication' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication'
+label = 'label_mood_blue' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication'
+label_cols = ['label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue', 'label_fall']
+
 # Filter to subjects with known hospital visit labels
 df = df[df[label].notna()]  # <- change here
 df = df.sort_values(['subid', 'date'])
@@ -14,8 +16,9 @@ feature_cols = [
     'steps', 'gait_speed', 'awakenings', 'bedexitcount', 'end_sleep_time',
     'inbed_time', 'outbed_time', 'sleepscore', 'durationinsleep', 'durationawake',
     'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
-    'time_in_bed_after_sleep', 'tossnturncount', 'maxhr', 'avghr', 'avgrr'
+    'time_in_bed_after_sleep', 'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'Night_Bathroom_Visits', 'Night_Kitchen_Visits', 
 ]
+
 
 demo_cols = ['birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat','moca_avg', 'cogstat']
 
@@ -46,6 +49,7 @@ for subid, group in df.groupby('subid'):
             cumulative_vals = pd.to_numeric(group.loc[prev_index:hosp_idx - 1, feat], errors='coerce')
             ma7_last = cumulative_vals[-7:].mean() if not cumulative_vals.empty else None
             interval_mean = vals.mean()
+            # Calculate delta as the mean of the interval minus the last 7-day mean
             delta_to_ma7 = (interval_mean - ma7_last) if ma7_last is not None else None
 
             feature_summary[f"{feat}_interval_mean"] = interval_mean
@@ -63,6 +67,25 @@ for subid, group in df.groupby('subid'):
             "amyloid": group.loc[hosp_idx, "amyloid"] if "amyloid" in group else None,
         }
         
+        # Compute interval length
+        interval_length = (tstop - tstart) + 1
+        
+        for col in label_cols:
+            if col != label:
+                interval[col + "_total"] = int((interval_data[col] == 1).sum())
+
+        lookback_data = group.loc[max(prev_index, hosp_idx - 7):hosp_idx - 1]
+        for col in label_cols:
+            if col != label:
+                interval[col + "_last7"] = int((lookback_data[col] == 1).sum())
+
+        for col in label_cols:
+            if col != label:
+                interval[col + "_delta"] = interval.get(col + "_total", 0) - interval.get(col + "_last7", 0)
+                interval[col + "_interval_mean"] = (
+                    interval.get(col + "_total", 0) / interval_length if interval_length > 0 else 0
+                )
+
         for col in demo_cols:
             interval[col] = group.loc[hosp_idx, col] if col in group.columns else None
 
@@ -125,6 +148,28 @@ for subid, group in df.groupby('subid'):
             "amyloid": group.iloc[-1].get("amyloid", None),
         }
         
+        # Compute interval length
+        interval_length = (tstop - tstart) + 1
+        
+        # Calculate totals for all other labels (excluding the target label)
+        for col in label_cols:
+            if col != label:
+                interval[col + "_total"] = int((interval_data[col] == 1).sum())
+
+        # 7-day lookback - use last 7 days of interval for censored intervals
+        lookback_data = interval_data.tail(7)
+        for col in label_cols:
+            if col != label:
+                interval[col + "_last7"] = int((lookback_data[col] == 1).sum())
+
+        # Calculate deltas and interval means
+        for col in label_cols:
+            if col != label:
+                interval[col + "_delta"] = interval.get(col + "_total", 0) - interval.get(col + "_last7", 0)
+                interval[col + "_interval_mean"] = (
+                    interval.get(col + "_total", 0) / interval_length if interval_length > 0 else 0
+                )
+                
         for col in demo_cols:
             interval[col] = group.iloc[-1][col] if col in group.columns else None
 

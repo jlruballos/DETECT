@@ -67,12 +67,13 @@ df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)  # Fill Na
 feature_cols = [
     'steps', 'awakenings', 'bedexitcount', 'end_sleep_time', 'gait_speed',
      'durationinsleep', 'inbed_time', 'outbed_time', 'durationawake', 'sleepscore',
-    'waso', 'hrvscore', 'start_sleep_time', #'time_to_sleep',
+    'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
      'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep',
-    #include demographic features
-    'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
-    'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
-    'livsitua_encoded', 'maristat_encoded', 'moca_avg'
+      'label_fall', 'label_hospital', 'label_accident',
+    # #include demographic features
+    # 'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
+    # 'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
+    # 'livsitua_encoded', 'maristat_encoded', 'moca_avg'
 ]
 
 #drop rows with NaN in feature columns or date
@@ -111,10 +112,34 @@ for year, group in df_clean.groupby('year'):
     X_pca = pca.fit_transform(X_scaled)
     print(f"Year {year}: Reduced features from {X_scaled.shape[1]} to {X_pca.shape[1]} PCA components.")
     
+    # Evaluate feature contributions to retained PCA components
+    loading_matrix = pd.DataFrame(
+		abs(pca.components_), 
+		columns=feature_cols
+	)
+
+	# Sum absolute contributions across all retained components
+    feature_contributions = loading_matrix.sum(axis=0)
+
+	# Normalize to show percent contribution
+    feature_contributions /= feature_contributions.sum()
+
+	# Rank features from least to most contributing
+    contribution_ranked = feature_contributions.sort_values()
+
+	# Save full contribution report
+    contribution_file = os.path.join(output_path, f"pca_feature_contributions_{year}.csv")
+    contribution_ranked.to_frame(name="normalized_contribution").to_csv(contribution_file)
+    print(f"Saved PCA feature contributions for {year} to {contribution_file}")
+
+	# Optionally: log the bottom 5 least contributing features
+    low_contributors = contribution_ranked.head(5)
+    print(f"Year {year} - Least contributing features after PCA:\n{low_contributors}")
+    
     # Tune K using both Elbow (Inertia) and Silhouette Score
     inertias = []
     sil_scores = []
-    k_range = range(2, 11)
+    k_range = range(2, 20)  # Adjust range as needed
     best_k, best_sil_score = 2, -1
     for k in k_range:
         kmeans = KMeans(n_clusters=k, random_state=42)
@@ -134,8 +159,8 @@ for year, group in df_clean.groupby('year'):
         inertias.append(inertia)
         sil_scores.append(sil)
         
-        if sil > best_sil_score:
-            best_k, best_sil_score = k, sil
+        if sil_pca > best_sil_score:
+            best_k, best_sil_score = k, sil_pca
 
 	# Plot Elbow and Silhouette side by side
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
@@ -168,28 +193,19 @@ for year, group in df_clean.groupby('year'):
     composition.to_csv(composition_file)
     print(f"Saved amyloid composition to {composition_file}")
 
-    # Filter out clusters with <2 participants
+	# Also run 2D PCA for plotting
+    subgroup['pca1'], subgroup['pca2'] = X_pca[:, 0], X_pca[:, 1]
+    
+    #unique participants in each cluster
     participant_counts = subgroup.groupby('cluster')['subid'].nunique()
-    valid_clusters = participant_counts[participant_counts >= 2].index
-    subgroup = subgroup[subgroup['cluster'].isin(valid_clusters)].copy()
-
-    if subgroup.empty:
-        print(f"⚠️ All clusters in year {year} had <2 participants — skipping.")
-        continue
-
-    # Refit + PCA
-    X_scaled_filtered = scaler.fit_transform(subgroup[feature_cols])
-    subgroup['cluster'] = KMeans(n_clusters=len(valid_clusters), random_state=42).fit_predict(X_scaled_filtered)
-    pca = PCA(n_components=2).fit_transform(X_scaled_filtered)
-    subgroup['pca1'], subgroup['pca2'] = pca[:, 0], pca[:, 1]
 
     # Save metrics
-    sil_score = silhouette_score(X_scaled_filtered, subgroup['cluster']) if len(valid_clusters) > 1 else None
-    ch_score = calinski_harabasz_score(X_scaled_filtered, subgroup['cluster']) if len(valid_clusters) > 1 else None
-    db_score = davies_bouldin_score(X_scaled_filtered, subgroup['cluster']) if len(valid_clusters) > 1 else None
+    sil_score = silhouette_score(X_pca, subgroup['cluster']) if best_k > 1 else None
+    ch_score = calinski_harabasz_score(X_pca, subgroup['cluster']) if best_k > 1 else None
+    db_score = davies_bouldin_score(X_pca, subgroup['cluster']) if best_k > 1 else None
     metrics.append({
         'year': str(year),
-        'n_clusters': len(valid_clusters),
+        'n_clusters': best_k,
         'silhouette_score': round(sil_score, 4) if sil_score else None,
         'calinski_harabasz_score': round(ch_score, 4) if ch_score else None,
 		'davies_bouldin_score': round(db_score, 4) if db_score else None,
@@ -265,38 +281,35 @@ cluster_summary.to_csv(general_summary_file)
 print(f"General cluster summary saved to {general_summary_file}")
 
 # Boxplots
-for feature in feature_cols:
-    plt.figure(figsize=(12, 6))
-    ax = sns.boxplot(
-        data=final_df,
-        x='cluster',
-        y=feature,
-        palette='Set2',
-        hue='cluster',
-        showmeans=False,  # Set to False since we're annotating medians manually
-        legend=False
-    )
+for year in final_df['year'].unique():
+    year_data = final_df[final_df['year'] == year]
+    for feature in feature_cols:
+        plt.figure(figsize=(12, 6))
+        ax = sns.boxplot(
+            data=year_data,
+            x='cluster',
+            y=feature,
+            palette='Set2',
+            hue='cluster',
+            showmeans=False,
+            legend=False
+        )
+        clusters = sorted(year_data['cluster'].unique())
+        for i, cluster in enumerate(clusters):
+            sub_data = year_data[year_data['cluster'] == cluster]
+            count = sub_data['subid'].nunique()
+            median_val = sub_data[feature].median()
+            y_max = sub_data[feature].max()
+            ax.text(i, y_max * 1.02, f"n={count}", ha='center', fontsize=9, color='blue')
+            ax.text(i, y_max * 0.95, f"med={median_val:.1f}", ha='center', fontsize=9, color='black')
 
-    # Get unique clusters in order
-    clusters = sorted(final_df['cluster'].unique())
-
-    # Annotate number of participants and median values per cluster
-    for i, cluster in enumerate(clusters):
-        sub_data = final_df[final_df['cluster'] == cluster]
-        count = sub_data['subid'].nunique()
-        median_val = sub_data[feature].median()
-        
-        # Place text slightly above top whisker
-        y_max = sub_data[feature].max()
-        ax.text(i, y_max * 1.02, f"n={count}", ha='center', fontsize=9, color='blue')
-        ax.text(i, y_max * 0.95, f"med={median_val:.1f}", ha='center', fontsize=9, color='black')
-
-    plt.title(f"{feature} by Cluster (All Participants)")
-    plt.xlabel("Cluster")
-    plt.ylabel(feature)
-    plt.tight_layout()
-    plt.savefig(os.path.join(box_plot_path, f"boxplot_{feature}_all.png"), dpi=300)
-    plt.close()
+        plt.title(f"{feature} by Cluster - Year {year}")
+        plt.xlabel("Cluster")
+        plt.ylabel(feature)
+        plt.tight_layout()
+        filename = f"boxplot_{feature}_year_{year}.png"
+        plt.savefig(os.path.join(box_plot_path, filename), dpi=300)
+        plt.close()
 
 # Plot cluster counts by year
 plt.figure(figsize=(12, 6))

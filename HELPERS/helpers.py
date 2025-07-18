@@ -391,25 +391,49 @@ def proc_emfit_data(df):
 	df['inbed_time'] = pd.to_datetime(df['inbed']).dt.time
 	df['outbed_time'] = pd.to_datetime(df['outbed']).dt.time
 
-	# Convert times to hours
-	df['inbed_time'] = df['inbed_time'].apply(lambda x: x.hour + x.minute / 60)
-	df['outbed_time'] = df['outbed_time'].apply(lambda x: x.hour + x.minute / 60)
-	df['start_sleep_time'] = df['start_sleep_time'].apply(lambda x: x.hour + x.minute / 60)
-	df['end_sleep_time'] = df['end_sleep_time'].apply(lambda x: x.hour + x.minute / 60)
+	# Convert times to hours (fractional)
+	def time_to_hour(t):
+		return t.hour + t.minute / 60 if pd.notnull(t) else np.nan
+
+	df['inbed_time'] = df['inbed_time'].apply(time_to_hour)
+	df['outbed_time'] = df['outbed_time'].apply(time_to_hour)
+	df['start_sleep_time'] = df['start_sleep_time'].apply(time_to_hour)
+	df['end_sleep_time'] = df['end_sleep_time'].apply(time_to_hour)
+
+	# Add circular encoding for start and end sleep time
+	for col in ['start_sleep_time', 'end_sleep_time']:
+		df[f'{col}_sin'] = np.sin(2 * np.pi * df[col] / 24)
+		df[f'{col}_cos'] = np.cos(2 * np.pi * df[col] / 24)
 
 	# Calculate time-related features
-	df['time_to_sleep'] = (df['start_sleep_time'] - df['inbed_time']) * 60
-	df['time_in_bed_after_sleep'] = (df['outbed_time'] - df['end_sleep_time']) * 60
-	df['total_time_in_bed'] = (pd.to_datetime(df['outbed']) - pd.to_datetime(df['inbed'])).dt.total_seconds() / 3600
+	df['time_to_sleep'] = ((df['start_sleep_time'] - df['inbed_time']) * 60).mask(lambda x: x < 0)
+	df['time_in_bed_after_sleep'] = ((df['outbed_time'] - df['end_sleep_time']) * 60).mask(lambda x: x < 0)
+	df['total_time_in_bed'] = (pd.to_datetime(df['outbed'], errors='coerce') - pd.to_datetime(df['inbed'], errors='coerce')).dt.total_seconds() / 3600
 
 	# Convert durations to appropriate units
 	df['durationinsleep'] = (df['durationinsleep'] / 60) # to minutes
 	df['durationawake'] = df['durationawake'] / 60  # to minutes
 	df['duration'] = (df['duration'] / 60)   # to minutes
+ 
 	df['durationinbed'] = (df['durationinbed'] / 60) #to minutes
 	df['durationbedexit'] = df['durationbedexit'] / 60  # to minutes
 	df['durationsleeponset'] = df['durationsleeponset'] / 60  # to minutes
 	df['waso'] = df['waso'] / 60  # to minutes
+ 
+	# -------- REMOVE NEGATIVE VALUES --------
+	non_neg_features = [
+		'time_to_sleep', 'time_in_bed_after_sleep', 'total_time_in_bed',
+		'durationinsleep', 'durationawake', 'duration', 'durationinbed',
+		'durationbedexit', 'durationsleeponset', 'waso'
+	]
+
+	# Mask negatives (or clip with clip(lower=0) if preferred)
+	for col in non_neg_features:
+		if col in df.columns:
+			n_neg = (df[col] < 0).sum()
+			if n_neg > 0:
+				print(f"⚠️  {col}: {n_neg} negative values replaced with NaN")
+			df[col] = df[col].mask(df[col] < 0)
  
 	return df
 

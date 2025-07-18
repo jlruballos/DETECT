@@ -24,7 +24,8 @@ for subid, group in df.groupby('subid'):
     'hrvscore', 'start_sleep_time', 'time_to_sleep', 
     'time_in_bed_after_sleep', 'tossnturncount', 
       'maxhr', 
-    'avghr', 'avgrr']
+    'avghr', 'avgrr', 'Night_Bathroom_Visits', 'Night_Kitchen_Visits',
+  ]
     
     #include additional features for interval summary
     demo_cols = ['birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat','moca_avg', 'cogstat']
@@ -94,12 +95,80 @@ for subid, group in df.groupby('subid'):
         has_hospital_visit = int((interval_data['label_hospital'] == 1).any())
         interval["hospital_visit"] = has_hospital_visit
         
+        # Compute interval length
+        interval_length = (tstop - tstart) + 1
+
+		# Total counts of hospital visits and accidents in this interval
+        interval["hospital_visit_total"] = int((interval_data["label_hospital"] == 1).sum())
+        interval["accident_total"] = int((interval_data["label_accident"] == 1).sum())
+        interval["label_medication"] = int((interval_data["label_medication"] == 1).sum())
+        interval["label_mood_lonely"] = int((interval_data["label_mood_lonely"] == 1).sum())
+        interval["label_mood_blue"] = int((interval_data["label_mood_blue"] == 1).sum())
+
+		# 7-day window (lookback) — before fall or last 7 days of interval
+        if interval["status"] == 1:  # fall interval
+            lookback_data = group.loc[max(prev_index, fall_idx - 7):fall_idx - 1]
+        else:  # censored interval
+            lookback_data = interval_data.tail(7)
+        
+        interval["hospital_visit_last7"] = int((lookback_data["label_hospital"] == 1).sum())
+        interval["accident_last7"] = int((lookback_data["label_accident"] == 1).sum())
+        interval["medication_last7"] = int((lookback_data["label_medication"] == 1).sum())
+        interval["label_mood_lonely_last7"] = int((lookback_data["label_mood_lonely"] == 1).sum())
+        interval["label_mood_blue_last7"] = int((lookback_data["label_mood_blue"] == 1).sum())
+
+		# Delta = total - last7
+        interval["hospital_visit_delta"] = interval["hospital_visit_total"] - interval["hospital_visit_last7"]
+        interval["accident_delta"] = interval["accident_total"] - interval["accident_last7"]
+        interval["medication_delta"] = interval["label_medication"] - interval["medication_last7"]
+        interval["label_mood_lonely_delta"] = interval["label_mood_lonely"] - interval["label_mood_lonely_last7"]
+        interval["label_mood_blue_delta"] = interval["label_mood_blue"] - interval["label_mood_blue_last7"]
+
+		# Mean: proportion of days with hospital visits or accidents
+        interval["hospital_visit_interval_mean"] = (
+			interval["hospital_visit_total"] / interval_length if interval_length > 0 else 0
+		)
+        interval["accident_interval_mean"] = (
+			interval["accident_total"] / interval_length if interval_length > 0 else 0
+		)
+        interval["medication_interval_mean"] = (
+			interval["label_medication"] / interval_length if interval_length > 0 else 0
+		)
+        interval["label_mood_lonely_interval_mean"] = (
+			interval["label_mood_lonely"] / interval_length if interval_length > 0 else 0
+		)
+        interval["label_mood_blue_interval_mean"] = (
+			interval["label_mood_blue"] / interval_length if interval_length > 0 else 0
+		)
+
         #add demographic features
         for col in demo_cols:
             interval[col] = group.loc[fall_idx, col] if col in group.columns else None
+            
+        # Ensure all output keys are always present
+		# Ensure all output keys are always present
+        interval["hospital_visit_total"] = interval.get("hospital_visit_total", 0)
+        interval["hospital_visit_last7"] = interval.get("hospital_visit_last7", 0)
+        interval["hospital_visit_delta"] = interval.get("hospital_visit_delta", 0)
+        interval["hospital_visit_interval_mean"] = interval.get("hospital_visit_interval_mean", 0)
+        interval["accident_total"] = interval.get("accident_total", 0)
+        interval["accident_last7"] = interval.get("accident_last7", 0)
+        interval["accident_delta"] = interval.get("accident_delta", 0)
+        interval["accident_interval_mean"] = interval.get("accident_interval_mean", 0)
+        interval["medication_total"] = interval.get("medication_total", 0)
+        interval["medication_last7"] = interval.get("medication_last7", 0)
+        interval["medication_delta"] = interval.get("medication_delta", 0)
+        interval["medication_interval_mean"] = interval.get("medication_interval_mean", 0)
+        interval["label_mood_lonely_total"] = interval.get("label_mood_lonely", 0)
+        interval["label_mood_lonely_last7"] = interval.get("label_mood_lonely_last7", 0)
+        interval["label_mood_lonely_delta"] = interval.get("label_mood_lonely_delta", 0)
+        interval["label_mood_lonely_interval_mean"] = interval.get("label_mood_lonely_interval_mean", 0)
+        interval["label_mood_blue_total"] = interval.get("label_mood_blue", 0)
+        interval["label_mood_blue_last7"] = interval.get("label_mood_blue_last7", 0)
+        interval["label_mood_blue_delta"] = interval.get("label_mood_blue_delta", 0)
+        interval["label_mood_blue_interval_mean"] = interval.get("label_mood_blue_interval_mean", 0)
     
         interval.update(feature_summary)
-        
         intervals.append(interval)
         event_num += 1
         prev_index = fall_idx + 1 #next interval start after the current fall
@@ -152,11 +221,79 @@ for subid, group in df.groupby('subid'):
         has_hospital_visit = int((interval_data['label_hospital'] == 1).any())
         interval["hospital_visit"] = has_hospital_visit
         
+        # Compute interval length
+        interval_length = (tstop - tstart) + 1
+
+		# Total counts of hospital visits and accidents in this interval
+        interval["hospital_visit_total"] = int((interval_data["label_hospital"] == 1).sum())
+        interval["accident_total"] = int((interval_data["label_accident"] == 1).sum())
+        interval["medication_total"] = int((interval_data["label_medication"] == 1).sum())
+        interval["label_mood_lonely"] = int((interval_data["label_mood_lonely"] == 1).sum())
+        interval["label_mood_blue"] = int((interval_data["label_mood_blue"] == 1).sum())
+
+		# 7-day window (lookback) — before fall or last 7 days of interval
+        if interval["status"] == 1:  # fall interval
+            lookback_data = group.loc[max(prev_index, fall_idx - 7):fall_idx - 1]
+        else:  # censored interval
+            lookback_data = interval_data.tail(7)
+        
+        interval["hospital_visit_last7"] = int((lookback_data["label_hospital"] == 1).sum())
+        interval["accident_last7"] = int((lookback_data["label_accident"] == 1).sum())
+        interval["medication_last7"] = int((lookback_data["label_medication"] == 1).sum())
+        interval["label_mood_lonely_last7"] = int((lookback_data["label_mood_lonely"] == 1).sum())
+        interval["label_mood_blue_last7"] = int((lookback_data["label_mood_blue"] == 1).sum())
+
+		# Delta = total - last7
+        interval["hospital_visit_delta"] = interval["hospital_visit_total"] - interval["hospital_visit_last7"]
+        interval["accident_delta"] = interval["accident_total"] - interval["accident_last7"]
+        interval["medication_delta"] = interval["medication_total"] - interval["medication_last7"]
+        interval["label_mood_lonely_delta"] = interval["label_mood_lonely"] - interval["label_mood_lonely_last7"]
+        interval["label_mood_blue_delta"] = interval["label_mood_blue"] - interval["label_mood_blue_last7"]
+
+		# Mean: proportion of days with hospital visits or accidents
+        interval["hospital_visit_interval_mean"] = (
+			interval["hospital_visit_total"] / interval_length if interval_length > 0 else 0
+		)
+        interval["accident_interval_mean"] = (
+			interval["accident_total"] / interval_length if interval_length > 0 else 0
+		)
+        interval["medication_interval_mean"] = (
+			interval["medication_total"] / interval_length if interval_length > 0 else 0
+		)
+        interval["label_mood_lonely_interval_mean"] = (
+			interval["label_mood_lonely"] / interval_length if interval_length > 0 else 0
+		)
+        interval["label_mood_blue_interval_mean"] = (
+			interval["label_mood_blue"] / interval_length if interval_length > 0 else 0
+		)
+
          #add demographic features
         for col in demo_cols:
             #interval[col] = group.loc[fall_idx, col] if col in group.columns else None
             interval[col] = group.iloc[-1][col] if col in group.columns else None
-  
+        
+		# Ensure all output keys are always present
+        interval["hospital_visit_total"] = interval.get("hospital_visit_total", 0)
+        interval["hospital_visit_last7"] = interval.get("hospital_visit_last7", 0)
+        interval["hospital_visit_delta"] = interval.get("hospital_visit_delta", 0)
+        interval["hospital_visit_interval_mean"] = interval.get("hospital_visit_interval_mean", 0)
+        interval["accident_total"] = interval.get("accident_total", 0)
+        interval["accident_last7"] = interval.get("accident_last7", 0)
+        interval["accident_delta"] = interval.get("accident_delta", 0)
+        interval["accident_interval_mean"] = interval.get("accident_interval_mean", 0)
+        interval["medication_total"] = interval.get("medication_total", 0)
+        interval["medication_last7"] = interval.get("medication_last7", 0)
+        interval["medication_delta"] = interval.get("medication_delta", 0)
+        interval["medication_interval_mean"] = interval.get("medication_interval_mean", 0)
+        interval["label_mood_lonely_total"] = interval.get("label_mood_lonely", 0)
+        interval["label_mood_lonely_last7"] = interval.get("label_mood_lonely_last7", 0)
+        interval["label_mood_lonely_delta"] = interval.get("label_mood_lonely_delta", 0)
+        interval["label_mood_lonely_interval_mean"] = interval.get("label_mood_lonely_interval_mean", 0)
+        interval["label_mood_blue_total"] = interval.get("label_mood_blue", 0)
+        interval["label_mood_blue_last7"] = interval.get("label_mood_blue_last7", 0)
+        interval["label_mood_blue_delta"] = interval.get("label_mood_blue_delta", 0)
+        interval["label_mood_blue_interval_mean"] = interval.get("label_mood_blue_interval_mean", 0)
+
         interval.update(feature_summary)
         intervals.append(interval)
             
