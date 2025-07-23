@@ -165,53 +165,72 @@ def impute_missing_data(df, columns=None, method='linear', multivariate=False):
     return df
 
 def plot_imp_diag_histo(original_df, imputed_df, columns, subid, output_dir, method_name):
-	
+    import numpy as np
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    import os
+
     os.makedirs(output_dir, exist_ok=True)
-    
+
     for col in columns:
         real_values = original_df[col].dropna()
         imputed_mask = original_df[col].isna()
-        imputed_values = imputed_df.loc[imputed_mask, col]
-        
+        imputed_values = imputed_df.loc[imputed_mask, col].dropna()
+
+        n_obs = real_values.nunique()
+        n_imp = imputed_values.nunique()
+        skip_obs = n_obs < 2
+        skip_imp = n_imp < 2
+
+        # Completely skip plotting if both are not plottable
+        if skip_obs and skip_imp:
+            print(f"[WARNING] Skipping plot for {col} (not enough unique observed or imputed values)")
+            continue
+
         plt.figure(figsize=(8, 5))
-        sns.histplot(
-			real_values,
-            color = 'blue',
-			label='Observed',
-			kde=True,
-			stat = "density",
-			alpha=0.5,
-		)
-        
-        sns.histplot(
-			imputed_values,
-			color = 'red',
-			label='Imputed',
-			kde=True,
-			stat = "density",
-			alpha=0.5,
-		)
-        
-        # sns.scatterplot(
-        #     x=imputed_values, 
-        #     y=[0.005]*len(imputed_values), 
-        #     color='red', 
-        #     label='Imputed', 
-        #     marker='x', 
-        #     s=100
-        #     )
-        
+        legend_labels = []
+
+        # Plot observed
+        if not skip_obs:
+            sns.histplot(
+                real_values,
+                color='blue',
+                label='Observed',
+                kde=True,
+                stat="density",
+                alpha=0.5,
+            )
+            legend_labels.append('Observed')
+        else:
+            print(f"[NOTE] Skipping observed histogram for {col} (not enough unique observed values)")
+
+        # Plot imputed
+        if not skip_imp:
+            sns.histplot(
+                imputed_values,
+                color='red',
+                label='Imputed',
+                kde=True,
+                stat="density",
+                alpha=0.5,
+            )
+            legend_labels.append('Imputed')
+        else:
+            print(f"[NOTE] Skipping imputed histogram for {col} (not enough unique imputed values)")
+
         plt.title(f"SubID: {subid} | Feature: {col} | Method: {method_name}")
         plt.xlabel(col)
         plt.ylabel("Density")
-        plt.legend()
+        if legend_labels:
+            plt.legend()
         plt.grid(True, alpha=0.5)
-        
+
         subid_dir = os.path.join(output_dir, f"subid_{subid}")
         os.makedirs(subid_dir, exist_ok=True)
         plot_filename = f"subid_{subid}_{col}_histogram_{method_name}.png"
         plt.savefig(os.path.join(subid_dir, plot_filename), dpi=300, bbox_inches='tight')
         plt.close()
+
   
 def track_missingness(original_df, imputed_df, columns, subid, imputation_method):
     """

@@ -39,8 +39,8 @@ import matplotlib.pyplot as plt
 
 # -------- CONFIG --------
 USE_WSL = True  # Set to True if running inside WSL (Linux on Windows)
-GENERATE_HISTO = True  # Set to True to generate histograms of diagnostic
-GENERATE_LINE = True  # Set to True to generate line plots of diagnostic
+GENERATE_HISTO = False  # Set to True to generate histograms of diagnostic
+GENERATE_LINE = False # Set to True to generate line plots of diagnostic
 
 # Define base paths depending on environment
 if USE_WSL:
@@ -82,6 +82,18 @@ os.makedirs(sleep_plot_dir, exist_ok=True)
 
 print(f"Output directory created at: {output_path}")
 
+# Log file for the pipeline
+# -------- LOGGING --------
+# add timestamp to log file name
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+logfile = os.path.join(output_path, f"pipeline_log_{timestamp}.txt")
+def log_step(message):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    full_msg = f"[{ts}] {message}"
+    print(full_msg)
+    with open(logfile, "a") as f:
+        f.write(full_msg + "\n")
+
 # File paths for datasets
 GAIT_PATH = os.path.join(base_path, 'DETECT_Data', 'NYCE_Data', 'COMBINED_NYCE_Area_Data_DETECT_GAIT_Summary.csv')
 STEPS_PATH = os.path.join(base_path, 'DETECT_Data', 'Watch_Data', 'Daily_Steps', 'Watch_Daily_Steps_DETECT_2024-12-16.csv')
@@ -104,9 +116,30 @@ clinical_df = pd.read_excel(CLINICAL_PATH)
 demo_df = pd.read_csv(DEMO_PATH)
 activity_df = pd.read_csv(ACTIVITY_PATH)
 
+# Filter to ensure each home_id maps to only one subid
+mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
+mapping_data = mapping_data.rename(columns={'sub_id': 'subid'})
+
+# Merge gait data with mapping to align home IDs with subject IDs
+print("Merging gait data with subject mapping...")
+gait_df = pd.merge(gait_df, mapping_data, left_on='homeid', right_on='home_id', how='inner')
+
+# Extract date from timestamp and aggregate daily gait speed by subject
+gait_df['date'] = pd.to_datetime(gait_df['start_time']).dt.date
+gait_df = gait_df.groupby(['subid', 'date'])['gait_speed'].mean().reset_index()
+
 #--------RENAME COLUMNS --------
 demo_df = demo_df.rename(columns={'record_id': 'subid'})
 clinical_df = clinical_df.rename(columns={'sub_id': 'subid'})
+
+#-------- ROW COUNTS --------
+log_step(f"[INITIAL] Loaded gait_df: N = {len(gait_df)}, Unique subids = {gait_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded steps_df: N = {len(steps_df)}, Unique subids = {steps_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded falls_df: N = {len(falls_df)}, Unique subids = {falls_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded emfit_df: N = {len(emfit_df)}, Unique subids = {emfit_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded clinical_df: N = {len(clinical_df)}, Unique subids = {clinical_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded demo_df: N = {len(demo_df)}, Unique subids = {demo_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded activity_df: N = {len(activity_df)}, Unique subids = {activity_df['subid'].nunique()}")
 
 #-------- EMFIT DATA PREPROCESSING --------
 emfit_df = proc_emfit_data(emfit_df)
@@ -114,6 +147,14 @@ emfit_df = proc_emfit_data(emfit_df)
 #-------- REMOVE NEGATIVE VALUES --------
 gait_df['gait_speed'] = gait_df['gait_speed'].mask(gait_df['gait_speed'] < 0, np.nan)
 steps_df['steps'] = steps_df['steps'].mask(steps_df['steps'] < 0, np.nan)
+
+# Log the number of negative values removed
+log_step(f"Removed negative values from steps_df: {steps_df['steps'].isna().sum()}")
+log_step(f"Removed negative values from gait_df: {gait_df['gait_speed'].isna().sum()}")
+
+#log new row counts after cleaning
+log_step(f"Post-Removing Negatives gait_df: N = {len(gait_df)}, Unique subids = {gait_df['subid'].nunique()}")
+log_step(f"Post-Removing Negatives steps_df: N = {len(steps_df)}, Unique subids = {steps_df['subid'].nunique()}")
 
 #--------- FEATURE SELECTION --------
 FEATURES = [
@@ -139,7 +180,8 @@ CLINICAL_FEATURES = [
 ] 
 
 DEMO_FEATURES = [
-	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat'
+	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat',
+    'primlang', 'mocatots'
 ]
 #visits are for night time activity 9pm - 6am
 ACTIVITY_FEATURES = [
@@ -150,20 +192,10 @@ ACTIVITY_FEATURES = [
 #change amalyoid status to 1 and 0 if Positve chane to 1 and if negative change to 0
 clinical_df['amyloid'] = clinical_df['clinical amyloid (+/-) read'].replace({'Positive': 1, 'Negative': 0})
 
-# Filter to ensure each home_id maps to only one subid
-mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
-mapping_data = mapping_data.rename(columns={'sub_id': 'subid'})
-
-# Merge gait data with mapping to align home IDs with subject IDs
-print("Merging gait data with subject mapping...")
-gait_df = pd.merge(gait_df, mapping_data, left_on='homeid', right_on='home_id', how='inner')
-
-# Extract date from timestamp and aggregate daily gait speed by subject
-gait_df['date'] = pd.to_datetime(gait_df['start_time']).dt.date
-gait_df = gait_df.groupby(['subid', 'date'])['gait_speed'].mean().reset_index()
-
 # Preprocess steps data to align with daily format
 steps_df = preprocess_steps(steps_df)
+#log the number of unique subids in steps_df after preprocessing
+log_step(f"Post-preprocessing steps_df: N = {len(steps_df)}, Unique subids = {steps_df['subid'].nunique()}")
 
 # Ensure date columns are datetime
 falls_df['fall1_date'] = pd.to_datetime(falls_df['fall1_date'], errors='coerce')
@@ -233,10 +265,38 @@ mask_features = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES  # Features to che
 
 # Identify subjects who have both gait and step data
 #subject_ids = set(gait_df['subid'].unique()).intersection(set(steps_df['subid']))
+
+#onlu keep subjects in the clinical cohort will be used 
 subject_ids = clinical_df['subid'].dropna().unique()
+#log what subids were dropped
+dropped_subids_gait = set(gait_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from gait_df: {dropped_subids_gait}")
+dropped_subids_steps = set(steps_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from steps_df: {dropped_subids_steps}")
+dropped_subids_falls = set(falls_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from falls_df: {dropped_subids_falls}")
+dropped_subids_emfit = set(emfit_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from emfit_df: {dropped_subids_emfit}")
+dropped_subids_clinical = set(clinical_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from clinical_df: {dropped_subids_clinical}")
+dropped_subids_demo = set(demo_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from demo_df: {dropped_subids_demo}")
+dropped_subids_activity = set(activity_df['subid'].unique()).difference(set(subject_ids))
+log_step(f"Dropped subids from activity_df: {dropped_subids_activity}")
 
 # Filter demo_df to only relevant subjects before MOCA averaging
+N_before = len(demo_df)
 demo_df = demo_df[demo_df['subid'].isin(subject_ids)]
+N_after = len(demo_df)
+#log the number of unique subids in demo_df after preprocessing
+log_step(f"Filtered demo_df to modeling subjects for MOCA averaging: N before = {N_before}, N after = {N_after}")
+log_step(f"Unique subids after filter for MOCA averaging demo_df: {demo_df['subid'].nunique()}")
+
+demo_df = demo_df[demo_df['visityr_cr'].notna()]
+demo_df['visit_date'] = pd.to_datetime(demo_df['visityr_cr'].astype(int).astype(str) + '-01-01')
+
+#log the number of unique subids in demo_df after filtering for visit year
+log_step(f"Filtered demo_df to modeling subjects with visit year: N = {len(demo_df)}, Unique subids = {demo_df['subid'].nunique()}")
 
 # Process MOCA scores: average per subject
 demo_df['moca_avg'] = demo_df.groupby('subid')['mocatots'].transform('mean')
@@ -248,13 +308,14 @@ raw_output_path = os.path.join(output_path, 'raw_before_imputation')
 os.makedirs(raw_output_path, exist_ok=True)
     
 for subid in subject_ids:
+
     # Extract data for each subject
     gait_sub = gait_df[gait_df['subid'] == subid].copy()
     steps_sub = steps_df[steps_df['subid'] == subid].copy()
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
     clinical_sub =  clinical_df[clinical_df['subid'] == subid].copy()
     activity_sub = activity_df[activity_df['subid'] == subid].copy()
-    demo_sub = demo_df[demo_df['subid'] == subid].copy()
+    #demo_sub = demo_df[demo_df['subid'] == subid].copy()
     subject_falls = falls_df[falls_df['subid'] == subid]
     
     #remove outliers from data
@@ -267,6 +328,10 @@ for subid in subject_ids:
  
     # Merge gait and step data by date
     daily_df = pd.merge(gait_sub, steps_sub[['date', 'steps']], on='date', how='outer')
+    
+    #log number of rows in daily_df after merging gait and steps
+    log_step(f"Subject {subid} - Daily Data after merging gait and steps: N = {len(daily_df)}")
+    
     #make sure dates are of the same type
     daily_df['date'] = pd.to_datetime(daily_df['date']).dt.date
     emfit_sub['date'] = pd.to_datetime(emfit_sub['date']).dt.date
@@ -274,15 +339,25 @@ for subid in subject_ids:
     daily_df = pd.merge(daily_df, emfit_sub[['date'] + EMFIT_FEATURES], on='date', how='outer')
     daily_df = daily_df.sort_values('date')
     
+    #log number of rows in daily_df after merging emfit data
+    log_step(f"Subject {subid} - Daily Data after merging emfit data: N = {len(daily_df)}")
+    
     original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
+    
+    #log CSV output for raw daily data before imputation
+    log_step(f"Saving raw daily data for subject {subid} before imputation.")
     
     # Save raw daily data before imputation (for debugging or audit)
     daily_df.to_csv(os.path.join(raw_output_path, f"{subid}_raw_before_imputation.csv"), index=False)
     print(f"Raw data for subject {subid} saved to {raw_output_path}")
     
+    
     if not activity_sub.empty:
         activity_sub['date'] = pd.to_datetime(activity_sub['Date']).dt.date
         daily_df = pd.merge(daily_df, activity_sub[['date'] + ACTIVITY_FEATURES], on='date', how='outer')
+        
+        #log number of rows in daily_df after merging activity data
+        log_step(f"Subject {subid} - Daily Data after merging activity data: N = {len(daily_df)}")
     else:
         print(f"No activity data for subject {subid}, skipping activity features.")
         for feat in ACTIVITY_FEATURES:
@@ -294,10 +369,47 @@ for subid in subject_ids:
     if not clinical_sub.empty:
         for feat in CLINICAL_FEATURES:
             daily_df[feat] = clinical_sub.iloc[0][feat]
-   
-    if not demo_sub.empty:
-        for feat in DEMO_FEATURES:
-            daily_df[feat] = demo_sub.iloc[0][feat]
+            #log number of rows in daily_df after adding clinical features
+            log_step(f"Subject {subid} - Daily Data after adding clinical features: N = {len(daily_df)}")
+
+    #Assign time-vaying demo features by year, used for demo features
+    daily_df['year'] = pd.to_datetime(daily_df['date']).dt.year
+    daily_df['year_date'] = pd.to_datetime(daily_df['year'].astype(str) + '-01-01')  # Create a date for the first day of the year
+    daily_df = daily_df.sort_values('year_date') # Sort by year_date to ensure chronological order
+    
+    subject_demo = demo_df[demo_df['subid'] == subid].copy()
+    #subject_demo['visit_date'] = pd.to_datetime(subject_demo['visityr_cr'].astype(str) + '-01-01')  # Create a date for the first day of the visit year
+    subject_demo = subject_demo.sort_values('visit_date')  # Sort by visit date to ensure chronological order
+    
+    #keep only the most recent record per visit_date
+    subject_demo = subject_demo.groupby(['subid', 'visit_date'], as_index=False).last()
+            
+    #merge demo features with backward asof
+    daily_df = pd.merge_asof(
+        daily_df,
+        subject_demo[['visit_date'] + DEMO_FEATURES],
+        left_on='year_date', right_on='visit_date',
+		direction='backward',  # Use the most recent demo features before the date
+    )
+    
+    #log number of rows in daily_df after merging demo features
+    log_step(f"Subject {subid} - Daily Data after merging demo features: N = {len(daily_df)}")
+    
+    #Fill any remaining NaNs (days before first checkup) with the earliest available demo features
+    for feat in DEMO_FEATURES:
+        if feat in subject_demo and not subject_demo.empty:
+            first_val = subject_demo[feat].iloc[0]
+            daily_df[feat] = daily_df[feat].fillna(first_val)
+    
+    #log number of rows in daily_df after filling NaNs with earliest demo features
+    log_step(f"Subject {subid} - Daily Data after filling NaNs with earliest demo features: N = {len(daily_df)}")
+    
+    #Drop helper columns
+    daily_df = daily_df.drop(columns=['year', 'year_date', 'visit_date'], axis=1, errors='ignore')
+
+    # if not demo_sub.empty:
+    #     for feat in DEMO_FEATURES:
+    #         daily_df[feat] = demo_sub.iloc[0][feat]
     
     #---Compute % missing per festure before imputation
     total_days = len(original_daily_df)
@@ -356,6 +468,9 @@ for subid in subject_ids:
                 valid = daily_df[[sin_col, cos_col]].dropna()
                 observed_angles = np.arctan2(valid[sin_col], valid[cos_col])
                 print(f"{prefix} circmean (hours): {(circmean(observed_angles, high=2*np.pi) * 24 / (2*np.pi)):.2f}")
+    
+    #log number of rows in daily_df after imputation
+    log_step(f"Subject {subid} - Daily Data after imputation: N = {len(daily_df)}")
 
 	# Inverse circular encoding to recover hour values from sin/cos
     for prefix in ['start_sleep_time', 'end_sleep_time']:
@@ -388,6 +503,9 @@ for subid in subject_ids:
 
     #add missingness mask to daily_df
     daily_df = pd.concat([daily_df, missingness_mask], axis=1)
+    
+    #log number of rows in daily_df after adding missingness mask
+    log_step(f"Subject {subid} - Daily Data after adding missingness mask: N = {len(daily_df)}")
     
     #count missing values after imputation
     missing_after = daily_df[FEATURES+EMFIT_FEATURES+ACTIVITY_FEATURES].isna().sum()
@@ -437,6 +555,9 @@ for subid in subject_ids:
     
     daily_df = pd.concat([daily_df, pd.DataFrame(engineered_cols)], axis=1)
     
+    #log number of rows in daily_df after adding engineered features
+    log_step(f"Subject {subid} - Daily Data after adding engineered features: N = {len(daily_df)}")
+    
     daily_df = daily_df.copy()
 
     # Prepare fall and hospital event dates
@@ -479,6 +600,9 @@ for subid in subject_ids:
     daily_df['days_since_mood_lonely'] = daily_df['date'].apply(lambda d: days_since_last_event(d, mood_lonely_dates))
     daily_df['days_since_accident'] = daily_df['date'].apply(lambda d: days_since_last_event(d, accident_dates))
     daily_df['days_since_medication'] = daily_df['date'].apply(lambda d: days_since_last_event(d, medication_dates))
+    
+    #log number of rows in daily_df after adding temporal context features
+    log_step(f"Subject {subid} - Daily Data after adding temporal context features: N = {len(daily_df)}")
 
     # Create event labels
     daily_df['label_fall'] = daily_df['date'].apply(lambda d: label_exact_day(d, fall_dates))
@@ -488,9 +612,18 @@ for subid in subject_ids:
     daily_df['label_accident'] = daily_df['date'].apply(lambda d: label_exact_day(d, accident_dates))
     daily_df['label_medication'] = daily_df['date'].apply(lambda d: label_exact_day(d, medication_dates))
     daily_df['label'] = daily_df[['label_fall', 'label_hospital', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']].max(axis=1)  # Combined label
+    
+    #log number of rows in daily_df after adding event labels
+    log_step(f"Subject {subid} - Daily Data after adding event labels: N = {len(daily_df)}")
 
     daily_df['subid'] = subid  # Add subject ID
+    #log number of rows in daily_df after adding subject ID
+    log_step(f"Subject {subid} - Daily Data after adding subject ID: N = {len(daily_df)}")
+    
     all_daily_data.append(daily_df.copy())
+    
+    #log the number of rows in all_daily_data after appending subject data
+    log_step(f"Appended data for subject {subid}. Total rows in all_daily_data: {len(pd.concat(all_daily_data))}")
     
     # Print imputation report
     print(f"Subject {subid} - Imputation report ({imputation_method}):")
@@ -501,6 +634,13 @@ for subid in subject_ids:
 # Concatenate all subjects' data into one DataFrame
 print("Saving labeled daily data...")
 final_df = pd.concat(all_daily_data)
+
+# --- After concatenating all_daily_data into final_df ---
+final_n = final_df['subid'].nunique()
+log_step(f"Final output N subjects: {final_n} (should match subject_ids N: {len(subject_ids)})")
+if final_n < len(subject_ids):
+    log_step(f"WARNING: {len(subject_ids) - final_n} subjects missing from final_df!")
+log_step(f"Shape of final_df: {final_df.shape}")
 
 # -------- REORDER COLUMNS --------
 temporal_cols = (

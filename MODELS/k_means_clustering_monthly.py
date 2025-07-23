@@ -54,14 +54,15 @@ df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)  # Fill Na
 
 # Define feature and demographic columns
 feature_cols = [
-    'steps', 'gait_speed', 'awakenings', 'bedexitcount', #'end_sleep_time',
-     'durationinsleep', 'inbed_time', 'outbed_time', #'durationawake', 'sleepscore',
-    'waso', 'hrvscore', #'start_sleep_time', 'time_to_sleep',
-     'tossnturncount', 'maxhr', 'avghr', 'avgrr', #'time_in_bed_after_sleep',
+    'steps', 'gait_speed', 'awakenings', 'bedexitcount', 'end_sleep_time',
+     'durationinsleep',  'durationawake', 'sleepscore', #'inbed_time', 'outbed_time',
+    'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
+     'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep',
+	'Night_Bathroom_Visits', 'Night_Kitchen_Visits', 'label_fall', 'label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue',
     #include demographic features
-    'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
-    'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
-    'livsitua_encoded', 'maristat_encoded', 'moca_avg'
+    # 'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
+    # 'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
+    # 'livsitua_encoded', 'maristat_encoded', 'moca_avg'
 ]
 
 #fill NaN values in feature columns with the mean of each column
@@ -99,7 +100,7 @@ for month, group in df_clean.groupby('month'):
 
         best_k = 2  # Reset best_k for each month
         best_sil_score = -1  # Reset best silhouette score for each month
-        for k in range(2, 6):
+        for k in range(2, 20):
             kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(X_scaled)
             labels_pca = kmeans.fit_predict(X_pca)

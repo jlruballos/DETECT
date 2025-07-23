@@ -8,9 +8,9 @@ library(reReg)
 library(reda) 
 
 # Load dataset
-df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_medication.csv")
+df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_mood_blue.csv")
 
-event_label <- "Medication"  # Change this to match the current event type
+event_label <- "Blue_1k"  # Change this to match the current event type
 
 # Factorize key variables
 df$sex <- factor(df$sex)
@@ -82,7 +82,7 @@ run_model <- function(df, feature_suffix, label) {
     formula = model_formula,
     data = temp_df,
     model = "cox",
-    B = 500,
+    B = 1000,
     se = "boot"
   )
   

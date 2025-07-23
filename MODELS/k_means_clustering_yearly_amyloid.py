@@ -59,10 +59,10 @@ df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)
 # Define feature and demographic columns
 feature_cols = [
     'steps', 'awakenings', 'bedexitcount', 'end_sleep_time', 'gait_speed',
-     'durationinsleep', 'inbed_time', 'outbed_time', 'durationawake', 'sleepscore',
+     'durationinsleep',  'durationawake', 'sleepscore', #'inbed_time', 'outbed_time',
     'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
      'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep', 'Night_Bathroom_Visits', 'Night_Kitchen_Visits',
-     'label_fall', 'label_hospital', 'label_accident',
+     'label_fall', 'label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue',
     #include demographic features
     # 'age', 'sex_encoded', 'cogstat_encoded', 'alzdis_encoded', 'hispanic_encoded',
     # 'race_encoded', 'educ_encoded', 'independ_encoded', 'residenc_encoded',
