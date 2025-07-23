@@ -342,16 +342,6 @@ for subid in subject_ids:
     #log number of rows in daily_df after merging emfit data
     log_step(f"Subject {subid} - Daily Data after merging emfit data: N = {len(daily_df)}")
     
-    original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
-    
-    #log CSV output for raw daily data before imputation
-    log_step(f"Saving raw daily data for subject {subid} before imputation.")
-    
-    # Save raw daily data before imputation (for debugging or audit)
-    daily_df.to_csv(os.path.join(raw_output_path, f"{subid}_raw_before_imputation.csv"), index=False)
-    print(f"Raw data for subject {subid} saved to {raw_output_path}")
-    
-    
     if not activity_sub.empty:
         activity_sub['date'] = pd.to_datetime(activity_sub['Date']).dt.date
         daily_df = pd.merge(daily_df, activity_sub[['date'] + ACTIVITY_FEATURES], on='date', how='outer')
@@ -362,8 +352,6 @@ for subid in subject_ids:
         print(f"No activity data for subject {subid}, skipping activity features.")
         for feat in ACTIVITY_FEATURES:
             daily_df[feat] = np.nan
-    
-    original_daily_df = daily_df.copy()
     
     	# Add clinical and demographic features
     if not clinical_sub.empty:
@@ -411,6 +399,23 @@ for subid in subject_ids:
     #     for feat in DEMO_FEATURES:
     #         daily_df[feat] = demo_sub.iloc[0][feat]
     
+    original_daily_df = daily_df.copy()  # Keep a copy of the original DataFrame for reference
+    
+    raw_daily_df = daily_df.copy()  # Keep a copy of the raw DataFrame for output before imputation
+    
+    #make sure dates are in order
+    raw_daily_df = raw_daily_df.sort_values('date').reset_index(drop=True)
+    
+    #make sure the subid clumn is populated with the current subid
+    raw_daily_df['subid'] = subid
+    
+    #log CSV output for raw daily data before imputation
+    log_step(f"Saving raw daily data for subject {subid} before imputation.")
+    
+    # Save raw daily data before imputation (for debugging or audit)
+    raw_daily_df.to_csv(os.path.join(raw_output_path, f"{subid}_raw_before_imputation.csv"), index=False)
+    print(f"Raw data for subject {subid} saved to {raw_output_path}")
+    
     #---Compute % missing per festure before imputation
     total_days = len(original_daily_df)
     missing_pct_columns = {}
@@ -431,6 +436,9 @@ for subid in subject_ids:
     #create missingness mask
     missingness_mask = daily_df[mask_features].isna().astype(int) ## 1 for missing, 0 for not missing
     missingness_mask.columns = [col +'_mask' for col in missingness_mask.columns] #rename columns to avoid confusion
+    
+    #log number of rows in daily_df after creating missingness mask and before imputation
+    log_step(f"Subject {subid} - Daily Data before imputation: N = {len(daily_df)}")
     
     if imputation_method == 'vae':
         # Use VAE imputer for missing data
