@@ -99,7 +99,8 @@ GAIT_PATH = os.path.join(base_path, 'DETECT_Data', 'NYCE_Data', 'COMBINED_NYCE_A
 STEPS_PATH = os.path.join(base_path, 'DETECT_Data', 'Watch_Data', 'Daily_Steps', 'Watch_Daily_Steps_DETECT_2024-12-16.csv')
 MAPPING_PATH = os.path.join(base_path, 'DETECT_Data', '_CONTEXT_FILES', 'Study_Home-Subject_Dates_2024-12-16', 'homeids_subids_NYCE.csv')
 FALLS_PATH = os.path.join(base_path, 'DETECT_Data', 'HUF', 'kaye_365_huf_detect.csv')
-EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
+#EMFIT_PATH = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
+EMFIT_PATH = os.path.join(base_path, 'OUTPUT', 'emfit_processing', 'emfit_sleep_1.csv')
 CLINICAL_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'DETECT-AD_Enrolled_Amyloid Status_PET_SUVR_QUEST_CENTILOID_20250116.xlsx')
 DEMO_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
 ACTIVITY_PATH = os.path.join(base_path, 'DETECT_Data', 'Processed_NYCE_Data', 'daily_area_hours_combined_output.csv')
@@ -258,6 +259,7 @@ falls_df['mood_lonely_date'] = falls_df.apply(
 # -------- FEATURE ENGINEERING --------
 all_daily_data = []
 missingness_records = []
+all_daily_data_raw = []  # Store raw daily data before imputation
 
 #mask_features = ['gait_speed', 'daily_steps']  # Features to check for missingness
 
@@ -328,7 +330,17 @@ for subid in subject_ids:
  
     # Merge gait and step data by date
     daily_df = pd.merge(gait_sub, steps_sub[['date', 'steps']], on='date', how='outer')
+    #check for duplicates after merging gait and steps
+    n_dupes = daily_df.duplicated(subset=['subid', 'date']).sum()
+    if n_dupes > 0:
+        log_step(f"WARNING: {n_dupes} duplicate rows found for {subid} in gait and steps merge!")
     
+    #orphan row check
+    feature_cols_temp = ['gait_speed', 'steps']
+    all_nan_rows = daily_df[feature_cols_temp].isna().all(axis=1).sum()
+    if all_nan_rows > 0:
+        log_step(f"WARNING: {all_nan_rows} rows with all feature columns NaN for {subid} in gait and steps merge!")
+
     #log number of rows in daily_df after merging gait and steps
     log_step(f"Subject {subid} - Daily Data after merging gait and steps: N = {len(daily_df)}")
     
@@ -337,6 +349,18 @@ for subid in subject_ids:
     emfit_sub['date'] = pd.to_datetime(emfit_sub['date']).dt.date
     
     daily_df = pd.merge(daily_df, emfit_sub[['date'] + EMFIT_FEATURES], on='date', how='outer')
+    
+	#check for duplicates after merging emfit data
+    n_dupes = daily_df.duplicated(subset=['subid', 'date']).sum()
+    if n_dupes > 0:
+        log_step(f"WARNING: {n_dupes} duplicate rows found for {subid} in emfit merge!")
+    
+    #orphan row check
+    emfit_features_temp = EMFIT_FEATURES
+    all_nan_rows = daily_df[emfit_features_temp].isna().all(axis=1).sum()
+    if all_nan_rows > 0:
+        log_step(f"WARNING: {all_nan_rows} rows with all emfit feature columns NaN for {subid} in emfit merge!")
+    
     daily_df = daily_df.sort_values('date')
     
     #log number of rows in daily_df after merging emfit data
@@ -346,6 +370,17 @@ for subid in subject_ids:
         activity_sub['date'] = pd.to_datetime(activity_sub['Date']).dt.date
         daily_df = pd.merge(daily_df, activity_sub[['date'] + ACTIVITY_FEATURES], on='date', how='outer')
         
+        #check for duplicates after merging activity data
+        n_dupes = daily_df.duplicated(subset=['subid', 'date']).sum()
+        if n_dupes > 0:
+            log_step(f"WARNING: {n_dupes} duplicate rows found for {subid} in activity merge!")
+        
+        #orphan row check
+        activity_features_temp = ACTIVITY_FEATURES
+        all_nan_rows = daily_df[activity_features_temp].isna().all(axis=1).sum()
+        if all_nan_rows > 0:
+            log_step(f"WARNING: {all_nan_rows} rows with all activity feature columns NaN for {subid} in activity merge!")
+
         #log number of rows in daily_df after merging activity data
         log_step(f"Subject {subid} - Daily Data after merging activity data: N = {len(daily_df)}")
     else:
@@ -379,6 +414,16 @@ for subid in subject_ids:
         left_on='year_date', right_on='visit_date',
 		direction='backward',  # Use the most recent demo features before the date
     )
+    #check for duplicates after merging demo features
+    n_dupes = daily_df.duplicated(subset=['subid', 'date']).sum()
+    if n_dupes > 0:
+        log_step(f"WARNING: {n_dupes} duplicate rows found for {subid} in demo features merge!")
+        
+    #check for orphan rows after merging demo features
+    demo_features_temp = DEMO_FEATURES
+    all_nan_rows = daily_df[demo_features_temp].isna().all(axis=1).sum()
+    if all_nan_rows > 0:
+        log_step(f"WARNING: {all_nan_rows} rows with all demo feature columns NaN for {subid} in demo features merge!")
     
     #log number of rows in daily_df after merging demo features
     log_step(f"Subject {subid} - Daily Data after merging demo features: N = {len(daily_df)}")
@@ -392,6 +437,17 @@ for subid in subject_ids:
     #log number of rows in daily_df after filling NaNs with earliest demo features
     log_step(f"Subject {subid} - Daily Data after filling NaNs with earliest demo features: N = {len(daily_df)}")
     
+    # --- DUPLICATE CHECK ---
+    n_dupes = daily_df.duplicated(subset=['subid', 'date']).sum()
+    if n_dupes > 0:
+        log_step(f"WARNING: {n_dupes} duplicate rows found for {subid}!")
+    
+    #check for orphan rows after merging demo features
+    demo_features_temp = DEMO_FEATURES
+    all_nan_rows = daily_df[demo_features_temp].isna().all(axis=1).sum()
+    if all_nan_rows > 0:
+        log_step(f"WARNING: {all_nan_rows} rows with all demo feature columns NaN for {subid} in demo features merge and before imputation!")
+
     #Drop helper columns
     daily_df = daily_df.drop(columns=['year', 'year_date', 'visit_date'], axis=1, errors='ignore')
 
@@ -408,6 +464,9 @@ for subid in subject_ids:
     
     #make sure the subid clumn is populated with the current subid
     raw_daily_df['subid'] = subid
+    
+    #concatinate raw_daily_df to all_daily_data_raw
+    all_daily_data_raw.append(raw_daily_df)
     
     #log CSV output for raw daily data before imputation
     log_step(f"Saving raw daily data for subject {subid} before imputation.")
@@ -643,6 +702,23 @@ for subid in subject_ids:
 print("Saving labeled daily data...")
 final_df = pd.concat(all_daily_data)
 
+# Final duplicate check: Is every subid-date combo present only once?
+n_dupes = final_df.duplicated(subset=['subid', 'date']).sum()
+if n_dupes > 0:
+    log_step(f"ERROR: {n_dupes} duplicated subid-date pairs found in final_df after concatenation!")
+    # Print out first few duplicate rows for inspection
+    print("First 10 duplicated (subid, date) entries:")
+    print(final_df[final_df.duplicated(['subid', 'date'], keep=False)].head(10))
+    dup_df = final_df[final_df.duplicated(['subid', 'date'], keep=False)]
+    dup_df.to_csv(os.path.join(output_path, 'debug_duplicated_subid_date.csv'), index=False)
+else:
+    log_step("SUCCESS: No duplicated subid-date pairs in final_df.")
+
+#check for duplicates in final_df
+n_dupes = final_df.duplicated(subset=['subid', 'date']).sum()
+if n_dupes > 0:
+	log_step(f"WARNING: {n_dupes} duplicate rows found in final_df!")
+ 
 # --- After concatenating all_daily_data into final_df ---
 final_n = final_df['subid'].nunique()
 log_step(f"Final output N subjects: {final_n} (should match subject_ids N: {len(subject_ids)})")
@@ -673,6 +749,20 @@ final_df = final_df[
     ['days_since_fall',  'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely', 'days_since_accident', 'days_since_medication'] +
      ['label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']
 ]
+
+#check for duplicates in final_df before saving to CSV
+n_dupes = final_df.duplicated(subset=['subid', 'date']).sum()
+if n_dupes > 0:
+    log_step(f"WARNING: {n_dupes} duplicate rows found in final_df!")
+
+#check for orphan rows in final_df before saving to CSV
+orphan_features = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES + DEMO_FEATURES + temporal_cols
+# Remove sine/cosine columns if present
+sincos_cols = ['start_sleep_time_sin', 'start_sleep_time_cos', 'end_sleep_time_sin', 'end_sleep_time_cos']
+orphan_features = [col for col in orphan_features if col not in sincos_cols]
+all_nan_rows = final_df[orphan_features].isna().all(axis=1).sum()
+if all_nan_rows > 0:
+	log_step(f"WARNING: {all_nan_rows} rows with all feature columns NaN in final_df before saving to CSV!")
 
 # -------- SAVE OUTPUT --------
 

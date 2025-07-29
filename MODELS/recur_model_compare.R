@@ -8,7 +8,7 @@ library(reReg)
 library(reda) 
 
 # Load dataset
-df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_mood_blue.csv")
+df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_falls.csv")
 
 event_label <- "Blue_1k"  # Change this to match the current event type
 
@@ -21,7 +21,10 @@ df$hispanic <- factor(df$hispanic)
 df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
 df$age_cat <- factor(df$age_cat)
 df$race <- factor(df$race)
+# Create a new column 'race_binary' to store the recoded values
+df$race_binary <- ifelse(df$race == "White", 1, 0) #race white is 1 and everything else is 0 or non-white
 df$livsitua <- factor(df$livsitua)
+df$livsitua_binary <- ifelse(df$livsitua == "lives_alone", 1, 0) #lives alone is 1 everything else is 0 or does not live alone
 df$educ <- factor(df$educ)
 df$residenc <- factor(df$residenc)
 df$maristat <- factor(df$maristat)

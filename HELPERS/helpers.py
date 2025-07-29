@@ -425,8 +425,8 @@ def proc_emfit_data(df):
 		df[f'{col}_cos'] = np.cos(2 * np.pi * df[col] / 24)
 
 	# Calculate time-related features
-	df['time_to_sleep'] = ((df['start_sleep_time'] - df['inbed_time']) * 60).mask(lambda x: x < 0)
-	df['time_in_bed_after_sleep'] = ((df['outbed_time'] - df['end_sleep_time']) * 60).mask(lambda x: x < 0)
+	#df['time_to_sleep'] = ((df['start_sleep_time'] - df['inbed_time']) * 60).mask(lambda x: x < 0) # this is durationsleeponset so this is redundant
+	df['time_in_bed_after_sleep'] = ((df['outbed_time'] - df['end_sleep_time']) * 60).abs()
 	df['total_time_in_bed'] = (pd.to_datetime(df['outbed'], errors='coerce') - pd.to_datetime(df['inbed'], errors='coerce')).dt.total_seconds() / 3600
 
 	# Convert durations to appropriate units
