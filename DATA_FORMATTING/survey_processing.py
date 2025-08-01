@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-Gait Speed Processing Pipeline
+Survey Processing Pipeline
 
-This script processes daily gait speed data from in-home NYCE sensors for participants in the DETECT study.
-It merges the gait data with subject IDs, filters and summarizes the data, and outputs cleaned files.
+This script processes weekly survey data from the DETECT study to identify event occurrences 
+such as falls, hospital visits, accidents, medication changes, and mood changes (blue/lonely).
 
-Main steps include:
-- Loading and validating the gait dataset
-- Merging with subject mapping file to assign `subid`
-- Converting timestamps to dates
-- Dropping rows with missing, negative, or duplicate values
-- Aggregating daily mean gait speed per subject (at the end)
-- Filtering out outliers above 300 cm/s
-- Saving cleaned datasets and summary files
+It performs the following steps:
+- Loads raw HUF survey data
+- Converts multiple date columns to datetime format
+- Fills missing fall dates for confirmed events
+- Combines multi-column events into list-format (e.g., hospital dates, accident dates)
+- Extracts weekly event frequencies for each event type
+- Saves cleaned data, frequency tables, and weekly event plots
+- Checks for duplicates and logs all processing steps
 
 Outputs include:
-- A cleaned gait dataset (`gait_speed_cleaned.csv`)
-- Summary CSVs of row counts and missingness
+- Cleaned survey dataset (`survey_cleaned.csv`)
+- Weekly event frequency CSVs (`event_frequency/`)
+- Weekly time-series bar plots per event
+- Summary tables of row counts and missingness
+- Logged processing steps
 """
 
 __author__ = "Jorge Ruballos"
@@ -32,6 +35,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
 
 program_name = 'survey_processing'
 
@@ -223,6 +227,7 @@ if not dup_rows.empty:
     dup_rows.to_csv(os.path.join(output_path, 'duplicate_entries.csv'), index=False)
 else:
     log_step("No duplicate rows found.")
+    
 
 #------ Save final cleaned data ------
 output_final = os.path.join(output_path, 'survey_cleaned.csv')

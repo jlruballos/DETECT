@@ -167,7 +167,7 @@ EMFIT_FEATURES = [
        'awakenings', 'bedexitcount', 
     'inbed_time', 'outbed_time', 'sleepscore', 
     'durationinsleep', 'durationawake', 'waso', 
-    'hrvscore', 'time_to_sleep', 
+    'hrvscore', 
     'time_in_bed_after_sleep', 'total_time_in_bed', 'tossnturncount', 
     'sleep_period', 'minhr', 'maxhr', 
     'avghr', 'avgrr', 'maxrr', 'minrr',

@@ -8,9 +8,9 @@ library(reReg)
 library(reda) 
 
 # Load dataset
-df <- read_csv("D:/DETECT/OUTPUT/raw_export_for_r/intervals_label_falls.csv")
+df <- read_csv("D:/DETECT/OUTPUT/survival_intervals/intervals_all_participants_label_mood_lonely.csv")
 
-event_label <- "Blue_1k"  # Change this to match the current event type
+event_label <- "Lonely"  # Change this to match the current event type
 
 # Factorize key variables
 df$sex <- factor(df$sex)
@@ -20,16 +20,20 @@ df$hispanic <- factor(df$hispanic)
 #df$age <- factor(df$age)
 df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
 df$age_cat <- factor(df$age_cat)
-df$race <- factor(df$race)
+df$age_bucket <- factor(df$age_bucket)
+#df$race <- factor(df$race)
 # Create a new column 'race_binary' to store the recoded values
-df$race_binary <- ifelse(df$race == "White", 1, 0) #race white is 1 and everything else is 0 or non-white
+#df$race_binary <- ifelse(df$race == "White", 1, 0) #race white is 1 and everything else is 0 or non-white
 df$livsitua <- factor(df$livsitua)
 df$livsitua_binary <- ifelse(df$livsitua == "lives_alone", 1, 0) #lives alone is 1 everything else is 0 or does not live alone
-df$educ <- factor(df$educ)
+#df$educ <- factor(df$educ)
+df$educ_group <- factor(df$educ_group)
+df$moca_category <- factor(df$moca_category)
 df$residenc <- factor(df$residenc)
 df$maristat <- factor(df$maristat)
 df$cogstat <- factor(df$cogstat)
-df$moca_cat <- cut(df$moca_avg, breaks = c(18, 26, 30), right = FALSE)
+df$race_group <- factor(df$race_group)
+#df$moca_cat <- cut(df$moca_avg, breaks = c(18, 26, 30), right = FALSE)
 #df$moca_avg <- factor(df$moca_avg)
 
 # Replace NA in alzdis with 0
@@ -37,11 +41,13 @@ df$alzdis[is.na(df$alzdis)] <- 0
 
 df$alzdis <- factor(df$alzdis)
 
-df$group <- paste0("Educ ", df$educ, " | Age ", df$age_cat, " | ", df$amyloid)
+#df$group <- paste0("Educ ", df$educ, " | Age ", df$age_cat, " | ", df$amyloid)
+
+df$group <- paste0( " | ", df$amyloid)
 
 
 # Define baseline demographic covariates
-baseline_covars <- c("age_cat", "sex", "amyloid", "race", 
+baseline_covars <- c("age_bucket", "sex", "amyloid",  "moca_category",
                      "livsitua", "residenc", "alzdis", "maristat", "cogstat")
 
 # Prepare data for plotting recurrent events (filter missing)
@@ -62,6 +68,10 @@ run_model <- function(df, feature_suffix, label) {
   
   # Drop rows with NA in any relevant covariates
   temp_df <- df %>% drop_na(all_of(covars))
+  
+  # NEW: Only drop rows missing critical survival variables
+  #critical_vars <- c("tstart", "tstop", "status", "id")
+  #temp_df <- df %>% drop_na(all_of(critical_vars))
   
   cat("  → Rows used in model:", nrow(temp_df), "\n")
   
