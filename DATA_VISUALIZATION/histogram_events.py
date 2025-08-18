@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # ---------- CONFIG ----------
-input_path = "/mnt/d/DETECT/OUTPUT/survey_processing/survey_cleaned.csv"
+input_path = "/mnt/d/DETECT/OUTPUT/survey_processing/survey_cleaned_consolidated.csv"
 output_dir = "/mnt/d/DETECT/OUTPUT/survey_processing/event_histograms_aggregate"
 os.makedirs(output_dir, exist_ok=True)
 
@@ -21,7 +21,7 @@ df['subid'] = df['subid'].astype(str)
 
 # ---------- Define Events ----------
 event_configs = {
-    'fall':        ['fall1_date'],
+    'fall':        ['fall1_date', 'fall2_date', 'fall3_date'],
     'hospital':    ['hospital_visit', 'hospital_visit_2'],
     'accident':    ['ACDT1_DATE', 'ACDT2_DATE', 'ACDT3_DATE'],
     'medication':  ['MED1_DATE', 'MED2_DATE', 'MED3_DATE', 'MED4_DATE'],

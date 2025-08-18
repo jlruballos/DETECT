@@ -41,7 +41,8 @@ def assign_sleep_label(group):
 base_path = '/mnt/d/DETECT'
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)  # Create output directory if it does not exist
-emfit_path = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
+#emfit_path = os.path.join(base_path, 'DETECT_Data', 'Emfit_Data', 'summary', 'Emfit_Summary_Data_DETECT_2024-12-16.csv')
+emfit_path = os.path.join(base_path, 'DETECT_Data_080825', 'Sensor_Data','Emfit_Data', 'Summary', 'Emfit_Summary_Data.csv')
 
 # Add helpers directory to system path
 sys.path.append(os.path.join(base_path, 'HELPERS'))

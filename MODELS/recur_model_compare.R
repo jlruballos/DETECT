@@ -7,6 +7,10 @@ library(tidyverse)
 library(reReg)
 library(reda) 
 
+library(dplyr)
+library(forcats)
+library(stringr)
+
 # Load dataset
 df <- read_csv("D:/DETECT/OUTPUT/survival_intervals/intervals_all_participants_label_mood_lonely.csv")
 
@@ -20,7 +24,8 @@ df$hispanic <- factor(df$hispanic)
 #df$age <- factor(df$age)
 df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
 df$age_cat <- factor(df$age_cat)
-df$age_bucket <- factor(df$age_bucket)
+df$age_ <- factor(df$age_bucket)
+#df$age_ <- factor(df$age_at_visit)
 #df$race <- factor(df$race)
 # Create a new column 'race_binary' to store the recoded values
 #df$race_binary <- ifelse(df$race == "White", 1, 0) #race white is 1 and everything else is 0 or non-white
@@ -28,9 +33,10 @@ df$livsitua <- factor(df$livsitua)
 df$livsitua_binary <- ifelse(df$livsitua == "lives_alone", 1, 0) #lives alone is 1 everything else is 0 or does not live alone
 #df$educ <- factor(df$educ)
 df$educ_group <- factor(df$educ_group)
-df$moca_category <- factor(df$moca_category)
+df$moca_ <- factor(df$moca_category)
 df$residenc <- factor(df$residenc)
-df$maristat <- factor(df$maristat)
+#df$maristat <- factor(df$maristat)
+df$maristat_ <- factor(df$maristat_recoded)
 df$cogstat <- factor(df$cogstat)
 df$race_group <- factor(df$race_group)
 #df$moca_cat <- cut(df$moca_avg, breaks = c(18, 26, 30), right = FALSE)
@@ -45,10 +51,62 @@ df$alzdis <- factor(df$alzdis)
 
 df$group <- paste0( " | ", df$amyloid)
 
+#recoding block
+
+# df <- df %>%
+#   rename(
+#     maristat = maristat_recoded,
+#     age = age_at_visit,
+#     moca = moca_category
+#   )
+
+df$sex <- fct_recode(df$sex,
+                     "_Male" = "1",
+                     "_Female" = "2"
+)
+
+df$amyloid <- fct_recode(df$amyloid,
+                         "_Negative" = "0",
+                         "_Positive" = "1"
+)
+
+df$livsitua <- fct_recode(df$livsitua,
+                          "_Lives Alone" = "1",
+                          "_Lives with Partner" = "2",
+                          "_Lives with Relative" = "3",
+                          "_Lives with Caregiver" = "4",
+                          "_Group Residence" = "5",
+                          "_Assisted Living" = "6",
+                          "_Unknown" = "9"
+)
+
+df$alzdis <- fct_recode(df$alzdis,
+                        "_Not Present" = "0",
+                        "_Present" = "1"
+)
+
+df$cogstat <- fct_recode(df$cogstat,
+                         "_Undeterminable" = "0",
+                         "_Better than Normal" = "1",
+                         "_Normal" = "2",
+                         "_1–2 Scores Abnormal" = "3",
+                         "_3+ Scores Abnormal" = "4"
+)
+
+df$residenc <- fct_recode(df$residenc,
+                          "_Private Residence" = "1",
+                          "_Retirement Community" = "2",
+                          "_Assisted Living" = "3",
+                          "_Skilled Nursing" = "4",
+                          "_Unknown" = "9"
+)
 
 # Define baseline demographic covariates
-baseline_covars <- c("age_bucket", "sex", "amyloid",  "moca_category",
-                     "livsitua", "residenc", "alzdis", "maristat", "cogstat")
+baseline_covars <- c( "sex", "amyloid", "moca_",
+                     "livsitua", "residenc", "alzdis", "maristat_", "cogstat")
+
+# baseline_covars <- c("age_at_visit", "sex", "amyloid",  "moca_category",
+#                      "livsitua", "residenc", "alzdis", "maristat", "cogstat")
 
 # Prepare data for plotting recurrent events (filter missing)
 plot_df <- df %>% drop_na(tstart, tstop, status, id, group)
@@ -114,29 +172,59 @@ mod_mean  <- run_model(df, "_interval_mean",  "Interval Mean Features")
 mod_roll  <- run_model(df, "_ma7_last",       "Rolling Mean (7-day) Features")
 mod_delta <- run_model(df, "_delta",          "Delta Features")
 
-
-
 # Define extraction function
+#extract_summary <- function(model, model_name) {
+ # s <- summary(model)
+  #tibble(
+   # variable = rownames(s$coefficients),
+    #estimate = s$coefficients[, "Estimate"],
+    #std.error = s$coefficients[, "StdErr"],
+  #  p_value = s$coefficients[, "p.value"],
+   # model = model_name
+  #)
+#}
+
 extract_summary <- function(model, model_name) {
-  s <- summary(model)
+  s <- tryCatch(summary(model), error = function(e) return(NULL))
+  if (is.null(s)) return(NULL)
+  
+  if (!all(c("Estimate", "StdErr", "p.value") %in% colnames(s$coefficients))) {
+    warning(paste("Model", model_name, "missing required columns."))
+    return(NULL)
+  }
+  
   tibble(
     variable = rownames(s$coefficients),
     estimate = s$coefficients[, "Estimate"],
+    std.error = s$coefficients[, "StdErr"],
     p_value = s$coefficients[, "p.value"],
     model = model_name
   )
 }
 
 # Extract summaries with correct model names
-summary_mean   <- extract_summary(mod_mean, "Interval Mean")
-summary_roll   <- extract_summary(mod_roll, "Rolling Mean")
-summary_delta  <- extract_summary(mod_delta, "Delta")
+# summary_mean   <- extract_summary(mod_mean, "Interval Mean")
+# summary_roll   <- extract_summary(mod_roll, "Rolling Mean")
+# summary_delta  <- extract_summary(mod_delta, "Delta")
 
 mod_counts     <- run_model(df, "_total", "Total Count Features")
 summary_counts <- extract_summary(mod_counts, "Total Counts")
 
+summary_list <- list(
+  extract_summary(mod_mean, "Interval Mean"),
+  extract_summary(mod_roll, "Rolling Mean"),
+  extract_summary(mod_delta, "Delta") #,
+ # extract_summary(mod_counts, "Total Counts")
+)
+
+# Filter out any NULL models that failed to extract
+summary_list <- summary_list[!sapply(summary_list, is.null)]
+
+all_summaries <- bind_rows(summary_list)
+
+
 # --- Combine all into one table ---
-all_summaries <- bind_rows(summary_mean, summary_roll, summary_delta, summary_counts)
+# all_summaries <- bind_rows(summary_mean, summary_roll, summary_delta, summary_counts)
 
 # Add hazard ratio column
 all_summaries <- all_summaries %>%
@@ -203,4 +291,157 @@ print(
   plot(Recur(tstop, id, status) ~ amyloid, data = plot_df, CSM = TRUE)
 )
 
+all_summaries <- all_summaries %>%
+  mutate(
+    hazard_ratio = exp(estimate),
+    lower = exp(estimate - 1.96 * std.error),
+    upper = exp(estimate + 1.96 * std.error)
+  ) %>%
+  arrange(desc(hazard_ratio))
+
+# Get top 10 terms with p ≤ 0.5 and highest HR
+top_tmp <- all_summaries %>%
+  group_by(model) %>%
+  filter(p_value <= 0.05) %>%
+  arrange(desc(hazard_ratio)) %>%
+  slice(1:5) %>%
+  filter(hazard_ratio > 1) %>%
+  filter(model %in% c("Interval Mean", "Rolling Mean"))
+
+bot_tmp <- all_summaries %>%
+  group_by(model) %>%
+  filter(p_value <= 0.05) %>%
+  arrange(hazard_ratio) %>%
+  slice(1:5) %>%
+  filter(hazard_ratio < 1) %>%
+  filter(model %in% c("Interval Mean", "Rolling Mean"))
+
+top_terms <- rbind(top_tmp, bot_tmp)
+
+top_terms <- top_terms %>%
+  mutate(
+    direction = ifelse(hazard_ratio > 1, "Increased Risk", "Decreased Risk")
+  )
+
+# Plot
+forest_plot <- ggplot(top_terms, aes(
+  x = hazard_ratio, 
+  y = reorder(variable, hazard_ratio), 
+  color = direction)) +
+  geom_vline(xintercept = 1, color = "gray75") +
+  geom_linerange(aes(xmin = lower, xmax = upper), linewidth = 1.5, alpha = 0.5) +
+  geom_point(size = 4) +
+  theme_minimal(base_size = 16) +
+  scale_color_manual(
+    values = c("Increased Risk" = "red3", "Decreased Risk" = "green4")
+  ) +
+  xlim(c(0, max(top_terms$upper, na.rm = TRUE) + 0.5)) +
+  labs(
+    title = str_wrap(paste("Hazard Ratios:", event_label, "Each Week"), width = 30),
+    subtitle = "p ≤ 0.05",
+    x = "Hazard Ratio Estimate (95% CI)",
+    y = NULL,
+    color = NULL
+  ) +
+  theme(
+    plot.title = element_text(size = 26),
+    plot.subtitle = element_text(size = 24),
+    plot.caption = element_text(size = 20),
+    axis.title.x = element_text(size = 23),
+    axis.title.y = element_text(size = 23),
+    axis.text.x = element_text(size = 21),
+    axis.text.y = element_text(size = 21),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 20),
+    strip.text.x = element_text(size = 22),
+    strip.text.y = element_text(size = 22),
+    legend.position = "bottom",
+    text = element_text(size = 20)
+  ) +
+  facet_wrap(~model)
+
+# Save the plot
+ggsave(
+  filename = paste0("D:/DETECT/OUTPUT/R_Output/Graphs/Hazard_Ratio_Mean_", event_label, ".png"),
+  plot = forest_plot,
+  width = 12,
+  height = 8,
+  dpi = 300
+)
+
+# Show the plot
+print(forest_plot)
+
+# Get top 10 terms with p ≤ 0.5 and highest HR
+top_tmp <- all_summaries %>%
+  group_by(model) %>%
+  filter(p_value <= 0.05) %>%
+  arrange(desc(hazard_ratio)) %>%
+  slice(1:5) %>%
+  filter(hazard_ratio > 1) %>%
+  filter(model %in% c("Delta"))
+
+bot_tmp <- all_summaries %>%
+  group_by(model) %>%
+  filter(p_value <= 0.05) %>%
+  arrange(hazard_ratio) %>%
+  slice(1:5) %>%
+  filter(hazard_ratio < 1) %>%
+  filter(model %in% c("Delta"))
+
+top_terms <- rbind(top_tmp, bot_tmp)
+
+top_terms <- top_terms %>%
+  mutate(
+    direction = ifelse(hazard_ratio > 1, "Increased Risk", "Decreased Risk")
+  )
+
+# Plot
+forest_plot_2 <- ggplot(top_terms, aes(
+  x = hazard_ratio, 
+  y = reorder(variable, hazard_ratio), 
+  color = direction)) +
+  geom_vline(xintercept = 1, color = "gray75") +
+  geom_linerange(aes(xmin = lower, xmax = upper), linewidth = 1.5, alpha = 0.5) +
+  geom_point(size = 4) +
+  theme_minimal(base_size = 16) +
+  scale_color_manual(
+    values = c("Increased Risk" = "red3", "Decreased Risk" = "green4")
+  ) +
+  xlim(c(0, max(top_terms$upper, na.rm = TRUE) + 0.5)) +
+  labs(
+    title = str_wrap(paste("Hazard Ratios:", event_label, "Each Week"), width = 30),
+    subtitle = "p ≤ 0.05",
+    x = "Hazard Ratio Estimate (95% CI)",
+    y = NULL,
+    color = NULL
+  ) +
+  theme(
+    plot.title = element_text(size = 26),
+    plot.subtitle = element_text(size = 24),
+    plot.caption = element_text(size = 20),
+    axis.title.x = element_text(size = 23),
+    axis.title.y = element_text(size = 23),
+    axis.text.x = element_text(size = 21),
+    axis.text.y = element_text(size = 21),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 20),
+    strip.text.x = element_text(size = 22),
+    strip.text.y = element_text(size = 22),
+    legend.position = "bottom",
+    text = element_text(size = 20)
+  ) +
+  facet_wrap(~model)
+
+# Save the plot
+ggsave(
+  filename = paste0("D:/DETECT/OUTPUT/R_Output/Graphs/Hazard_Ratio_Delta_", event_label, ".png"),
+  plot = forest_plot_2,
+  width = 9,
+  height = 8,
+  dpi = 300
+)
+
+# Show the plot
+print(forest_plot_2)
 

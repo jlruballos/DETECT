@@ -34,7 +34,8 @@ program_name = 'watch_steps_processing'
 base_path = '/mnt/d/DETECT'
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)
-steps_path = os.path.join(base_path, 'DETECT_Data', 'Watch_Data', 'Daily_Steps', 'Watch_Daily_Steps_DETECT_2024-12-16.csv')
+#steps_path = os.path.join(base_path, 'DETECT_Data', 'Watch_Data', 'Daily_Steps', 'Watch_Daily_Steps_DETECT_2024-12-16.csv')
+steps_path = os.path.join(base_path, 'DETECT_DATA_080825', 'Sensor_Data','Watch_Data', 'Daily_Steps', 'Watch_Daily_Steps.csv')
 
 #------ Load helpers ------
 sys.path.append(os.path.join(base_path, 'HELPERS'))

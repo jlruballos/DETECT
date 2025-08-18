@@ -111,7 +111,7 @@ def track_step(df, subid, step_name, step_num, tracking_records):
     n_dupes = df.duplicated(subset=['subid', 'date']).sum() if 'date' in df.columns else 0
     
     # Count missing values for key columns
-    key_cols = ['gait_speed', 'steps'] + [col for col in df.columns if col in EMFIT_FEATURES + ACTIVITY_FEATURES + DEMO_FEATURES + CLINICAL_FEATURES]
+    key_cols = ['gait_speed', 'steps'] + [col for col in df.columns if col in EMFIT_FEATURES + ACTIVITY_FEATURES + TRANSITION_FEATURES + DEMO_FEATURES + CLINICAL_FEATURES]
     missing_counts = {}
     for col in key_cols:
         if col in df.columns:
@@ -144,9 +144,10 @@ EMFIT_PATH = os.path.join(base_path, 'OUTPUT', 'emfit_processing', 'emfit_sleep_
 CLINICAL_PATH = os.path.join(base_path, 'OUTPUT', 'clinical_participant_processing', 'clinical_cleaned.csv')
 DEMO_PATH = os.path.join(base_path, 'OUTPUT', 'yearly_visit_processing', 'yearly_recoded.csv')
 ACTIVITY_PATH = os.path.join(base_path, 'OUTPUT', 'activity_processing', 'activity_cleaned.csv')
+TRANSITIONS_PATH = os.path.join(base_path, 'OUTPUT', 'transitions_processing', 'transitions_cleaned.csv')
 
 # Validate files exist upfront
-required_files = [GAIT_PATH, STEPS_PATH, MAPPING_PATH, FALLS_PATH, EMFIT_PATH, CLINICAL_PATH, DEMO_PATH, ACTIVITY_PATH]
+required_files = [GAIT_PATH, STEPS_PATH, MAPPING_PATH, FALLS_PATH, EMFIT_PATH, CLINICAL_PATH, DEMO_PATH, ACTIVITY_PATH, TRANSITIONS_PATH]
 for file_path in required_files:
     if not os.path.exists(file_path):
         log_step(f"ERROR: Required file not found: {file_path}")
@@ -163,6 +164,7 @@ emfit_df = pd.read_csv(EMFIT_PATH)
 clinical_df = pd.read_csv(CLINICAL_PATH)
 demo_df = pd.read_csv(DEMO_PATH)
 activity_df = pd.read_csv(ACTIVITY_PATH)
+transitions_df = pd.read_csv(TRANSITIONS_PATH)
 
 # Filter to ensure each home_id maps to only one subid
 mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
@@ -180,6 +182,7 @@ log_step(f"[INITIAL] Loaded emfit_df: N = {len(emfit_df)}, Unique subids = {emfi
 log_step(f"[INITIAL] Loaded clinical_df: N = {len(clinical_df)}, Unique subids = {clinical_df['subid'].nunique()}")
 log_step(f"[INITIAL] Loaded demo_df: N = {len(demo_df)}, Unique subids = {demo_df['subid'].nunique()}")
 log_step(f"[INITIAL] Loaded activity_df: N = {len(activity_df)}, Unique subids = {activity_df['subid'].nunique()}")
+log_step(f"[INITIAL] Loaded transitions_df: N = {len(transitions_df)}, Unique subids = {transitions_df['subid'].nunique()}")
 
 #-------- EMFIT DATA PREPROCESSING --------
 emfit_df = proc_emfit_data(emfit_df)
@@ -206,12 +209,18 @@ CLINICAL_FEATURES = [
 ] 
 
 DEMO_FEATURES = [
-	'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat',
-    'primlang', 'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group'
+	 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc',  'maristat', 'moca_avg', 'cogstat',
+    'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded',
+    #not int he newest dataset 8/17/25
+    #'birthyr', 'alzdis', 'primlang', 
 ]
 
 ACTIVITY_FEATURES = [
 	'Night_Bathroom_Visits', 'Night_Kitchen_Visits'
+]
+
+TRANSITION_FEATURES = [
+    'transition_count'
 ]
 
 # -------- FEATURE ENGINEERING --------
@@ -219,7 +228,7 @@ all_daily_data = []
 all_daily_data_raw = []  # Store raw daily data before imputation
 tracking_records = []  # Track metrics at each step
 
-mask_features = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES  # Features to check for missingness
+mask_features = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES + TRANSITION_FEATURES  # Features to check for missingness
 
 # Get unique subids from all major datasets
 subid_sets = [
@@ -229,7 +238,8 @@ subid_sets = [
     set(emfit_df['subid'].dropna().unique()),
     set(activity_df['subid'].dropna().unique()),
     set(demo_df['subid'].dropna().unique()),
-    set(clinical_df['subid'].dropna().unique())
+    set(clinical_df['subid'].dropna().unique()),
+    set(transitions_df['subid'].dropna().unique()),
 ]
 
 # Take the union of all subids
@@ -246,7 +256,8 @@ dataset_info = {
     'emfit': set(emfit_df['subid'].dropna().unique()),
     'activity': set(activity_df['subid'].dropna().unique()),
     'demo': set(demo_df['subid'].dropna().unique()),
-    'clinical': set(clinical_df['subid'].dropna().unique())
+    'clinical': set(clinical_df['subid'].dropna().unique()),
+    'transitions': set(transitions_df['subid'].dropna().unique())
 }
 
 missing_subids_report = []
@@ -284,6 +295,7 @@ for subid in subject_ids:
     emfit_sub = emfit_df[emfit_df['subid'] == subid].copy()
     clinical_sub = clinical_df[clinical_df['subid'] == subid].copy()
     activity_sub = activity_df[activity_df['subid'] == subid].copy()
+    transitions_sub = transitions_df[transitions_df['subid'] == subid].copy()
     subject_falls = falls_df[falls_df['subid'] == subid]
 
     if gait_sub.empty and steps_sub.empty and emfit_sub.empty:
@@ -297,7 +309,8 @@ for subid in subject_ids:
             'activity_present': not activity_sub.empty,
             'clinical_present': not clinical_sub.empty,
             'demo_present': subid in set(demo_df['subid'].unique()),
-            'falls_present': not subject_falls.empty
+            'falls_present': not subject_falls.empty,
+            'transitions_present': not transitions_sub.empty
         })
         continue
 
@@ -325,20 +338,32 @@ for subid in subject_ids:
         for feat in ACTIVITY_FEATURES:
             daily_df[feat] = np.nan
         track_step(daily_df, subid, "after_activity_fill_nan", 3, tracking_records)
-    
-    # STEP 4: Add clinical features
+
+    # STEP 4: Merge transitions data
+    if not transitions_sub.empty:
+        transitions_sub['date'] = pd.to_datetime(transitions_sub['date']).dt.date
+        daily_df = pd.merge(daily_df, transitions_sub[['date'] + TRANSITION_FEATURES], on='date', how='outer')
+        daily_df['subid'] = subid  # Ensure subid is populated after merge
+        track_step(daily_df, subid, "after_transitions_merge", 4, tracking_records)
+    else:
+        log_step(f"No transitions data for subject {subid}, filling with NaN")
+        for feat in TRANSITION_FEATURES:
+            daily_df[feat] = np.nan
+        track_step(daily_df, subid, "after_transitions_fill_nan", 4, tracking_records)
+
+    # STEP 5: Add clinical features
     if not clinical_sub.empty:
         for feat in CLINICAL_FEATURES:
             if feat in clinical_sub.columns:
                 daily_df[feat] = clinical_sub.iloc[0][feat]
-        track_step(daily_df, subid, "after_clinical_features", 4, tracking_records)
+        track_step(daily_df, subid, "after_clinical_features", 5, tracking_records)
     else:
         log_step(f"No clinical data for subject {subid}, filling with NaN")
         for feat in CLINICAL_FEATURES:
             daily_df[feat] = np.nan
-        track_step(daily_df, subid, "after_clinical_fill_nan", 4, tracking_records)
+        track_step(daily_df, subid, "after_clinical_fill_nan", 5, tracking_records)
 
-    # STEP 5: Add demographic features (time-varying by year)
+    # STEP 6: Add demographic features (time-varying by year)
     daily_df['year'] = pd.to_datetime(daily_df['date']).dt.year
     daily_df['year_date'] = pd.to_datetime(daily_df['year'].astype(str) + '-01-01')
     daily_df = daily_df.sort_values('year_date')
@@ -368,21 +393,21 @@ for subid in subject_ids:
             daily_df[feat] = np.nan
             
     daily_df['subid'] = subid  # Ensure subid is populated after merge
-    track_step(daily_df, subid, "after_demo_features", 5, tracking_records)
+    track_step(daily_df, subid, "after_demo_features", 6, tracking_records)
 
     # Drop helper columns
     daily_df = daily_df.drop(columns=['year', 'year_date', 'visit_date'], errors='ignore')
     daily_df = daily_df.sort_values('date').reset_index(drop=True)
     daily_df['subid'] = subid
     
-    # STEP 6: Store raw data before imputation
+    # STEP 7: Store raw data before imputation
     all_daily_data_raw.append(daily_df.copy())
-    
-    # STEP 7: Compute missingness percentages and create masks
+
+    # STEP 8: Compute missingness percentages and create masks
     total_days = len(daily_df)
     missing_pct_columns = {}
 
-    for feat in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES:
+    for feat in FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES + TRANSITION_FEATURES:
         if feat in daily_df.columns:
             missing_count = daily_df[feat].isna().sum()
             missing_pct = round((missing_count / total_days) * 100, 2) if total_days > 0 else np.nan
@@ -398,9 +423,9 @@ for subid in subject_ids:
     missingness_mask.columns = [col +'_mask' for col in missingness_mask.columns]
     daily_df = pd.concat([daily_df, missingness_mask], axis=1)
     
-    track_step(daily_df, subid, "after_missingness_processing", 6, tracking_records)
+    track_step(daily_df, subid, "after_missingness_processing", 7, tracking_records)
 
-    # STEP 8: Process fall and event data
+    # STEP 9: Process fall and event data
     for col in ['mood_blue_date', 'mood_lonely_date']:
         if col in subject_falls.columns:
             subject_falls.loc[:, col] = pd.to_datetime(subject_falls[col], errors='coerce')
@@ -487,6 +512,7 @@ col_groups = [
     CLINICAL_FEATURES, 
     EMFIT_FEATURES,
     ACTIVITY_FEATURES,
+    TRANSITION_FEATURES,
     DEMO_FEATURES,
     ['days_since_fall', 'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely', 'days_since_accident', 'days_since_medication'],
     ['label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']

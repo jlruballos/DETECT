@@ -45,7 +45,8 @@ base_path = '/mnt/d/DETECT'
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)
 
-YEARLY_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
+#YEARLY_PATH = os.path.join(base_path, 'DETECT_Data', 'Clinical', 'Clinical', 'kaye_365_clin_age_at_visit.csv')
+YEARLY_PATH = os.path.join(base_path, 'DETECT_DATA_080825', 'Clinical_Data', 'detect_uds3_full_2.csv')
 
 #------ Logging ------
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -72,6 +73,10 @@ row_counts_0 = yearly_df['subid'].value_counts().sort_index()
 row_counts_0.to_csv(os.path.join(output_path, 'row_counts_step_0.csv'))
 missing_0 = yearly_df.isnull().sum()
 missing_0[missing_0 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_0.csv'))
+
+#-------parse year from visit date------
+log_step("Parsing visit year from visit date.")
+yearly_df['visityr_cr'] = pd.to_datetime(yearly_df['visit_date']).dt.year
 
 #------ Step 1: Drop missing values ------
 log_step("Step 1: Dropping rows with missing subid or Visit Year.")
@@ -102,17 +107,27 @@ missing_2 = yearly_df.isnull().sum()
 missing_2[missing_2 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_2.csv'))
 
 #------- Step 3: for alzdis fill in missing with 0------
-log_step("Step 3: Filling missing alzdis with 0.")
-yearly_df['alzdis'] = yearly_df['alzdis'].fillna(0)
+if 'alzdis' in yearly_df.columns:
+    log_step("Step 3: Filling missing alzdis with 0.")
+    yearly_df['alzdis'] = yearly_df['alzdis'].fillna(0)
 
-print(f"Number of subjects with yearly survey data: {len(yearly_df['subid'].unique())}")
-num_subids_3 = yearly_df['subid'].nunique()
-total_rows_3 = len(yearly_df)
-log_step(f"Step 3: {num_subids_3} unique subids, {total_rows_3} total rows after filling missing alzdis.")
-row_counts_3 = yearly_df['subid'].value_counts().sort_index()
-row_counts_3.to_csv(os.path.join(output_path, 'row_counts_step_3.csv'))
-missing_3 = yearly_df.isnull().sum()
-missing_3[missing_3 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_3.csv'))
+    print(f"Number of subjects with yearly survey data: {len(yearly_df['subid'].unique())}")
+    num_subids_3 = yearly_df['subid'].nunique()
+    total_rows_3 = len(yearly_df)
+    log_step(f"Step 3: {num_subids_3} unique subids, {total_rows_3} total rows after filling missing alzdis.")
+    row_counts_3 = yearly_df['subid'].value_counts().sort_index()
+    row_counts_3.to_csv(os.path.join(output_path, 'row_counts_step_3.csv'))
+    missing_3 = yearly_df.isnull().sum()
+    missing_3[missing_3 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_3.csv'))
+else:
+    log_step("Step 3: 'alzdis' column not found, skipping filling missing values.")
+    num_subids_3 = yearly_df['subid'].nunique()
+    total_rows_3 = len(yearly_df)
+    log_step(f"Step 3: {num_subids_3} unique subids, {total_rows_3} total rows after skipping filling missing alzdis.")
+    row_counts_3 = yearly_df['subid'].value_counts().sort_index()
+    row_counts_3.to_csv(os.path.join(output_path, 'row_counts_step_3.csv'))
+    missing_3 = yearly_df.isnull().sum()
+    missing_3[missing_3 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_3.csv'))
 
 #------ Step 4: Create MOCA average column ------
 log_step("Step 4: Creating MOCA average column.")
@@ -132,7 +147,7 @@ missing_4[missing_4 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_4
 
 #------ Step 5: Forward fill certain demographics that wont change over time ------
 log_step("Step 5: Forward filling demographic features per participant.")
-demographic_features = ['hispanic', 'race', 'racesec', 'raceter', 'primlang', 'educ']
+demographic_features = ['hispanic', 'race', 'racesec', 'raceter', 'educ']
 
 # Sort by subid and visit date first
 yearly_df = yearly_df.sort_values(by=['subid', 'visit_date'])
@@ -189,24 +204,43 @@ def recode_education(val):
     elif val == 99:
         return "Unknown"
     else:
-        return "Other"
+        return "Not_Reported"
 
 yearly_df['educ_group'] = yearly_df['educ'].apply(recode_education)
 
 # --- MoCA Cognitive Category Recoding ---
 def recode_moca(score):
     if pd.isna(score):
-        return "Unknown"
+        return "Not_Reported"
     elif score >= 26:
         return "Normal"
     elif score >= 18:
         return "Mild"
-    elif score >= 10:
+    elif score >= 10 :
         return "Moderate"
     else:
         return "Severe"
 
 yearly_df['moca_category'] = yearly_df['mocatots'].apply(recode_moca)
+
+# --- Marital Status Category Recoding ---
+def recode_maristat(val):
+    if val in [1, 6]:
+        return "Married"
+    elif val == 2:
+        return "Widowed"
+    elif val == 3:
+        return "Divorced"
+    elif val == 4:
+        return "Separated"
+    elif val == 5:
+        return "Never_Married"
+    elif val == 9:
+        return "Unknown"
+    else:
+        return "Not_Reported"
+
+yearly_df['maristat_recoded'] = yearly_df['maristat'].apply(recode_maristat)
 
 # --- Race Group Recode: White, Non-White, Unknown ---
 def label_race(val):
@@ -214,7 +248,6 @@ def label_race(val):
         val = int(val)
     except:
         return "Unknown"
-    
     if val == 1:
         return "White"
     elif val == 99:
@@ -238,6 +271,7 @@ yearly_df['age_bucket'].value_counts().sort_index().to_csv(os.path.join(output_p
 yearly_df['educ_group'].value_counts().to_csv(os.path.join(output_path, 'educ_group_counts.csv'))
 yearly_df['moca_category'].value_counts().to_csv(os.path.join(output_path, 'moca_category_counts.csv'))
 yearly_df['race_group'].value_counts().to_csv(os.path.join(output_path, 'race_group_counts.csv'))
+yearly_df['maristat_recoded'].value_counts().to_csv(os.path.join(output_path, 'maristat_recoded_counts.csv'))
 
 # --- Save recoded dataset ---
 recoded_output = os.path.join(output_path, 'yearly_recoded.csv')

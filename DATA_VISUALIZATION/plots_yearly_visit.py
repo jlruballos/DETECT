@@ -22,7 +22,7 @@ df['year'] = df['visit_date'].dt.year
 DEMO_FEATURES = [
     'birthyr', 'sex', 'hispanic', 'race_group', 'educ_group', 'livsitua', 'independ',
     'residenc', 'alzdis', 'maristat', 'cogstat',
-    'primlang', 'moca_category', 'age_bucket', 'birthyr', 'alzdis'
+    'primlang', 'moca_category', 'age_bucket', 'birthyr', 'alzdis', 'maristat_recoded',
 ]
 
 cat_features = [col for col in DEMO_FEATURES if col in df.columns and

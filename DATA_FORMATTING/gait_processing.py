@@ -36,7 +36,8 @@ base_path = '/mnt/d/DETECT'
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)
 
-GAIT_PATH = os.path.join(base_path, 'DETECT_Data', 'NYCE_Data', 'COMBINED_NYCE_Area_Data_DETECT_GAIT_Summary.csv')
+#GAIT_PATH = os.path.join(base_path, 'DETECT_Data', 'NYCE_Data', 'COMBINED_NYCE_Area_Data_DETECT_GAIT_Summary.csv')
+GAIT_PATH = os.path.join(base_path, 'OUTPUT', 'GAIT', 'COMBINED_NYCE_Area_Data_DETECT_GAIT_Summary.csv')
 MAPPING_PATH = os.path.join(base_path, 'DETECT_Data', '_CONTEXT_FILES', 'Study_Home-Subject_Dates_2024-12-16', 'homeids_subids_NYCE.csv')
 
 #------ Logging ------

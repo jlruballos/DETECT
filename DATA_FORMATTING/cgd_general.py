@@ -9,7 +9,7 @@ print(f"Created output directory: {output_dir}")
 # Load labeled daily data
 df = pd.read_csv("/mnt/d/DETECT/OUTPUT/impute_data/labeled_daily_data_mean_imputed.csv", parse_dates=["date"])
 
-label = 'label_mood_lonely' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication'
+label = 'label_fall' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication'
 label_cols = ['label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue', 'label_fall']
 
 # KEY CHANGE 1: Remove the filter - keep ALL subjects
@@ -31,7 +31,7 @@ feature_cols = [
 ]
 
 demo_cols = ['birthyr', 'sex', 'hispanic', 'race_group', 'educ_group', 'livsitua', 'independ', 'residenc', 
-             'alzdis', 'maristat','moca_category', 'cogstat', 'age_bucket']
+             'alzdis', 'maristat_recoded','moca_category', 'cogstat', 'age_bucket', 'age_at_visit']
 
 intervals = []
 

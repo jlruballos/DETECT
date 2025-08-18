@@ -152,7 +152,7 @@ CLINICAL_FEATURES = [
 
 DEMO_FEATURES = [
     'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat',
-    'primlang', 'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group'
+    'primlang', 'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded'
 ]
 
 # Features that will be imputed

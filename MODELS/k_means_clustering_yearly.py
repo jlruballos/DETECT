@@ -2,6 +2,8 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
@@ -17,7 +19,8 @@ os.makedirs(plot_path, exist_ok=True)
 box_plot_path = os.path.join(output_path, "boxplots")
 os.makedirs(box_plot_path, exist_ok=True)
 
-df = pd.read_csv("/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_mean.csv", parse_dates=["date"])
+#df = pd.read_csv("/mnt/d/DETECT/OUTPUT/sequence_feature/labeled_daily_data_mean.csv", parse_dates=["date"])
+df = pd.read_csv("/mnt/d/DETECT/OUTPUT/impute_data/labeled_daily_data_mean_imputed.csv", parse_dates=["date"])
 
 
 demo_cols = ['birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat','moca_avg', 'cogstat', 'amyloid']
@@ -67,7 +70,7 @@ df_clean['alzdis_encoded'] = df_clean['alzdis'].fillna(0).astype(int)  # Fill Na
 feature_cols = [
     'steps', 'awakenings', 'bedexitcount', 'end_sleep_time', 'gait_speed',
      'durationinsleep',  'durationawake', 'sleepscore', #'inbed_time', 'outbed_time',
-    'waso', 'hrvscore', 'start_sleep_time', 'time_to_sleep',
+    'waso', 'hrvscore', 'start_sleep_time', 
      'tossnturncount', 'maxhr', 'avghr', 'avgrr', 'time_in_bed_after_sleep',
       'label_fall', 'label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue',
       'Night_Bathroom_Visits', 'Night_Kitchen_Visits',
@@ -88,7 +91,9 @@ df_clean = df_clean[(df_clean[feature_cols] >= 0).all(axis=1)].copy()
 
 
 #prepare for clustering
-df_clean['amyloid'] = df_clean['amyloid'].astype(int) # #0 for negative, 1 for positive
+#df_clean['amyloid'] = df_clean['amyloid'].astype(int) # #0 for negative, 1 for positive
+
+df_clean['amyloid'] = df_clean['amyloid'].fillna(-1).astype(int) # -1 for unknown, 0 for negative, 1 for positive
 
 df_clean['year'] = df_clean['date'].dt.year  # Add year column
 
