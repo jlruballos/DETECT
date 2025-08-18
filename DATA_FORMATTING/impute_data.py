@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
-Imputation Pipeline for DETECT Sensor Data
+Imputation Pipeline for DETECT Sensor Data (subject- & feature-aware)
 
-This script takes the unimputed dataset from the combine_clean_data pipeline
-and applies various imputation methods with feature engineering.
+This script:
+- Loads the unimputed daily dataset from combine_clean_data
+- For each SUBJECT and each FEATURE:
+    * Only imputes if that subject has at least MIN_REAL_POINTS real (non-NaN) values
+    * Skips imputation if the column is 100% missing for that subject (no modality creation)
+    * Engineers features ONLY for columns with >= MIN_REAL_POINTS real values
+- Adds missingness masks
+- Tracks step-by-step missingness and writes logs/CSVs
 
-The script supports:
-- Multiple imputation methods (mean, median, forward fill, VAE)
-- Circular encoding handling for sleep times
-- Feature engineering (normalization, deltas, rolling means)
-- Comprehensive tracking and diagnostics
-- Multiple output formats for different downstream analyses
+Author: Jorge Ruballos
+Email: ruballoj@oregonstate.edu
+Date: 2025-07-31
+Version: 1.1.0
 """
-
-__author__ = "Jorge Ruballos"
-__email__ = "ruballoj@oregonstate.edu"
-__date__ = "2025-7-31"
-__version__ = "1.0.0"
 
 import pandas as pd
 import numpy as np
@@ -24,15 +23,18 @@ import os
 from datetime import datetime
 import sys
 
-# Set matplotlib backend before importing pyplot to avoid Qt issues
+# --- Matplotlib setup for optional diagnostics ---
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # -------- CONFIG --------
-USE_WSL = True  # Set to True if running inside WSL (Linux on Windows)
-GENERATE_HISTO = False  # Set to True to generate histograms of diagnostic
-GENERATE_LINE = False # Set to True to generate line plots of diagnostic
+USE_WSL = True  # True if running inside WSL (Linux on Windows)
+GENERATE_HISTO = False
+GENERATE_LINE = False
+
+# Minimum number of real points a subject must have for a column to be eligible
+MIN_REAL_POINTS = 3  # <-- tune this; 3–7 is a reasonable range
 
 # Define base paths depending on environment
 if USE_WSL:
@@ -44,15 +46,15 @@ else:
 sys.path.append(os.path.join(base_path, 'HELPERS'))
 from helpers import (
     impute_missing_data,
-    plot_imp_diag_histo,  
+    plot_imp_diag_histo,
     track_missingness,
-    plot_imp_diag_timeseries, 
+    plot_imp_diag_timeseries,
     remove_outliers
 )
 
 # Try to import VAE imputer (optional)
 try:
-    from vae_imputer import impute_subject_data 
+    from vae_imputer import impute_subject_data
     VAE_AVAILABLE = True
 except ImportError:
     VAE_AVAILABLE = False
@@ -61,9 +63,8 @@ except ImportError:
 program_name = 'impute_data'
 
 # -------- IMPUTATION SETTINGS --------
-imputation_method = 'mean'  # Options: 'mean', 'median', 'forward', 'backward', 'vae'
-# VAE variant for imputation (only used if imputation_method = 'vae')
-variant = 'encoder + decoder mask'  # Options: 'Zero Imputation', 'Encoder Mask', 'Encoder + Decoder Mask'
+imputation_method = 'mean'  # 'mean', 'median', 'forward', 'backward', 'vae'
+variant = 'encoder + decoder mask'  # used only if imputation_method == 'vae'
 
 output_path = os.path.join(base_path, 'OUTPUT', program_name)
 os.makedirs(output_path, exist_ok=True)
@@ -72,31 +73,29 @@ os.makedirs(output_path, exist_ok=True)
 sleep_plot_dir = os.path.join(output_path, 'diagnostics', 'sleep_time_plots')
 os.makedirs(sleep_plot_dir, exist_ok=True)
 
-print(f"Output directory created at: {output_path}")
+print(f"Output directory: {output_path}")
 
 # -------- LOGGING --------
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 logfile = os.path.join(output_path, f"imputation_log_{timestamp}.txt")
-def log_step(message):
+def log_step(message: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_msg = f"[{ts}] {message}"
     print(full_msg)
     with open(logfile, "a") as f:
         f.write(full_msg + "\n")
 
-# -------- STEP TRACKING FUNCTIONS --------
+# -------- STEP TRACKING --------
 def track_imputation_step(df, subid, step_name, step_num, tracking_records, feature_cols):
-    """Track metrics for each imputation step"""
+    """Track metrics for each imputation step."""
     n_rows = len(df)
-    
-    # Count missing values for key columns
     missing_counts = {}
     for col in feature_cols:
         if col in df.columns:
-            missing_counts[f'{col}_missing'] = df[col].isna().sum()
-            missing_counts[f'{col}_missing_pct'] = round((df[col].isna().sum() / n_rows) * 100, 2) if n_rows > 0 else 0
-    
-    # Store tracking info
+            miss = df[col].isna().sum()
+            missing_counts[f'{col}_missing'] = miss
+            missing_counts[f'{col}_missing_pct'] = round((miss / n_rows) * 100, 2) if n_rows > 0 else 0
+
     record = {
         'subid': subid,
         'step_num': step_num,
@@ -105,223 +104,247 @@ def track_imputation_step(df, subid, step_name, step_num, tracking_records, feat
         'imputation_method': imputation_method,
         **missing_counts
     }
-    
     tracking_records.append(record)
-    
-    # Log summary
-    missing_summary = ', '.join([f"{k.replace('_missing', '')}: {v}" for k, v in missing_counts.items() 
-                                if k.endswith('_missing') and v > 0])
+
+    missing_summary = ', '.join(
+        [f"{k.replace('_missing','')}: {v}" for k, v in missing_counts.items() if k.endswith('_missing') and v > 0]
+    )
     log_step(f"Subject {subid} - {step_name}: N={n_rows}, Missing=[{missing_summary}]")
-    
     return record
 
-# -------- INPUT DATA PATHS --------
-# Path to the unimputed dataset from combine_clean_data pipeline
+# -------- INPUT DATA PATH --------
 INPUT_DATA_PATH = os.path.join(base_path, 'OUTPUT', 'combine_clean_data', 'labeled_daily_data_unimputed.csv')
-
-# Validate input file exists
 if not os.path.exists(INPUT_DATA_PATH):
     log_step(f"ERROR: Input file not found: {INPUT_DATA_PATH}")
     sys.exit(1)
 
 # -------- FEATURE DEFINITIONS --------
-# These should match the features from your original pipeline
 FEATURES = [
-    'steps', 
-    'gait_speed', 
+    'steps',
+    'gait_speed',
 ]
 
 EMFIT_FEATURES = [
-    'awakenings', 'bedexitcount', 
-    'inbed_time', 'outbed_time', 'sleepscore', 
-    'durationinsleep', 'durationawake', 'waso', 
-    'hrvscore', 
-    'time_in_bed_after_sleep', 'total_time_in_bed', 'tossnturncount', 
-    'sleep_period', 'minhr', 'maxhr', 
+    'awakenings', 'bedexitcount',
+    'inbed_time', 'outbed_time', 'sleepscore',
+    'durationinsleep', 'durationawake', 'waso',
+    'hrvscore',
+    'time_in_bed_after_sleep', 'total_time_in_bed', 'tossnturncount',
+    'sleep_period', 'minhr', 'maxhr',
     'avghr', 'avgrr', 'maxrr', 'minrr',
-    'start_sleep_time', 'end_sleep_time' 
+    'start_sleep_time', 'end_sleep_time'
 ]
 
 ACTIVITY_FEATURES = [
     'Night_Bathroom_Visits', 'Night_Kitchen_Visits'
 ]
 
-CLINICAL_FEATURES = [
-    'amyloid'
-] 
-
-DEMO_FEATURES = [
-    'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc', 'alzdis', 'maristat', 'moca_avg', 'cogstat',
-    'primlang', 'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded'
+TRANSITION_FEATURES = [
+    'transition_count'
 ]
 
-# Features that will be imputed
-IMPUTABLE_FEATURES = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES
+CLINICAL_FEATURES = [
+    'amyloid'
+]
+
+DEMO_FEATURES = [
+    'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc',
+    'alzdis', 'maristat', 'moca_avg', 'cogstat', 'primlang', 'mocatots', 'age_at_visit',
+    'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded'
+]
+
+IMPUTABLE_FEATURES = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES + TRANSITION_FEATURES
 
 # -------- LOAD DATA --------
 log_step("Loading unimputed dataset...")
 input_df = pd.read_csv(INPUT_DATA_PATH)
 log_step(f"Loaded dataset with shape: {input_df.shape}")
-log_step(f"Unique subjects: {input_df['subid'].nunique()}")
 
-# Convert date column to proper date type
+# Ensure date is date-type
 input_df['date'] = pd.to_datetime(input_df['date']).dt.date
 
-# Get list of subjects
+unique_subs = input_df['subid'].nunique()
+log_step(f"Unique subjects: {unique_subs}")
+
 subject_ids = sorted(input_df['subid'].unique())
 log_step(f"Processing {len(subject_ids)} subjects")
 
-# -------- IMPUTATION PIPELINE --------
+# -------- HELPERS --------
+def split_columns_for_subject(df: pd.DataFrame, candidates, min_points: int = 1):
+    """
+    Categorize columns by availability within a subject's dataframe.
+      - cols_present: column exists in df
+      - cols_with_any_data: >= min_points non-NaN
+      - cols_with_missing: subset of above that still have some NaNs
+      - cols_all_missing: present but 0 non-NaN
+    """
+    cols_present = [c for c in candidates if c in df.columns]
+    non_na_counts = {c: df[c].notna().sum() for c in cols_present}
+    cols_with_any_data = [c for c in cols_present if non_na_counts[c] >= min_points]
+    cols_with_missing = [c for c in cols_with_any_data if df[c].isna().any()]
+    cols_all_missing = [c for c in cols_present if non_na_counts[c] == 0]
+    return cols_present, cols_with_any_data, cols_with_missing, cols_all_missing
+
+# -------- MAIN LOOP --------
 imputed_data = []
 missingness_records = []
 tracking_records = []
 raw_data_before_imputation = []
 
-# Create output directory for raw data before imputation
 raw_output_path = os.path.join(output_path, 'raw_before_imputation')
 os.makedirs(raw_output_path, exist_ok=True)
 
 for subid in subject_ids:
     log_step(f"\n=== Processing Subject {subid} ===")
-    
-    # Extract subject data
     subject_df = input_df[input_df['subid'] == subid].copy()
     subject_df = subject_df.sort_values('date').reset_index(drop=True)
-    
+
     if subject_df.empty:
-        log_step(f"No data found for subject {subid}, skipping...")
+        log_step(f"No data for subject {subid}; skipping.")
         continue
-    
-    # STEP 1: Track initial state
-    available_imputable_features = [col for col in IMPUTABLE_FEATURES if col in subject_df.columns]
-    track_imputation_step(subject_df, subid, "initial_load", 1, tracking_records, available_imputable_features)
-    
-    # Store original data for comparison
+
+    # STEP 1: Availability split with MIN_REAL_POINTS guard
+    all_imputable_candidates = [c for c in IMPUTABLE_FEATURES if c in subject_df.columns]
+    (cols_present,
+     cols_with_any_data,
+     cols_with_missing,
+     cols_all_missing) = split_columns_for_subject(subject_df, all_imputable_candidates, min_points=MIN_REAL_POINTS)
+
+    track_imputation_step(subject_df, subid, "initial_load", 1, tracking_records, cols_present)
+    log_step(
+        f"Subject {subid} | present:{len(cols_present)} any_data:{len(cols_with_any_data)} "
+        f"missing:{len(cols_with_missing)} all_missing:{len(cols_all_missing)} "
+        f"(MIN_REAL_POINTS={MIN_REAL_POINTS})"
+    )
+    if cols_all_missing:
+        log_step(f"Subject {subid} - All-missing columns (skipping impute & features): {cols_all_missing}")
+
+    # Save raw before imputation
     original_subject_df = subject_df.copy()
-    
-    # Save raw data before imputation
     raw_data_before_imputation.append(subject_df.copy())
     subject_df.to_csv(os.path.join(raw_output_path, f"{subid}_raw_before_imputation.csv"), index=False)
-    
-    # STEP 2: Compute missingness percentages
+
+    # STEP 2: Missingness % (optional auditing)
     total_days = len(subject_df)
-    missing_pct_columns = {}
-    
-    for feat in available_imputable_features:
-        missing_count = subject_df[feat].isna().sum()
-        missing_pct = round((missing_count / total_days) * 100, 2) if total_days > 0 else np.nan
-        missing_pct_columns[f"{feat}_missing_pct"] = missing_pct
-    
-    # Add missing percentages to dataframe
-    for col_name, value in missing_pct_columns.items():
-        subject_df[col_name] = value
-    
-    # STEP 3: Create missingness mask
-    mask_features = [col for col in available_imputable_features if col in subject_df.columns]
+    for feat in cols_present:
+        miss_pct = round((subject_df[feat].isna().sum() / total_days) * 100, 2) if total_days > 0 else np.nan
+        subject_df[f"{feat}_missing_pct"] = miss_pct
+
+    # STEP 3: Masks for present columns
+    mask_features = cols_present
     missingness_mask = subject_df[mask_features].isna().astype(int)
-    missingness_mask.columns = [col + '_mask' for col in missingness_mask.columns]
-    
-    track_imputation_step(subject_df, subid, "before_imputation", 2, tracking_records, available_imputable_features)
-    
-    # Count missing values before imputation
-    missing_before = subject_df[available_imputable_features].isna().sum()
-    
-    # STEP 4: Apply imputation
-    if imputation_method == 'vae' and VAE_AVAILABLE:
-        log_step(f"Applying VAE imputation with variant: {variant}")
-        subject_df = impute_subject_data(subject_df, input_columns=available_imputable_features, 
-                                       epochs=30, variant=variant)
-    else:
-        if imputation_method == 'vae' and not VAE_AVAILABLE:
-            log_step("VAE not available, falling back to mean imputation")
-            imputation_method_actual = 'mean'
+    missingness_mask.columns = [c + '_mask' for c in missingness_mask.columns]
+
+    track_imputation_step(subject_df, subid, "before_imputation", 2, tracking_records, cols_present)
+    missing_before = subject_df[cols_present].isna().sum()
+
+    # STEP 4: Impute ONLY columns that (a) have >= MIN_REAL_POINTS real values AND (b) have some NaNs
+    if cols_with_missing:
+        if imputation_method == 'vae' and VAE_AVAILABLE:
+            log_step(f"Applying VAE imputation ({variant}) to {len(cols_with_missing)} columns")
+            subject_df = impute_subject_data(
+                subject_df, input_columns=cols_with_missing, epochs=30, variant=variant
+            )
         else:
-            imputation_method_actual = imputation_method
-        
-        log_step(f"Applying {imputation_method_actual} imputation")    
-        subject_df = impute_missing_data(subject_df, columns=available_imputable_features, 
-                                       method=imputation_method_actual, multivariate=False)
-    
-    track_imputation_step(subject_df, subid, "after_imputation", 3, tracking_records, available_imputable_features)
-    
-    # STEP 4: Add missingness mask back to dataframe
+            if imputation_method == 'vae' and not VAE_AVAILABLE:
+                log_step("VAE unavailable; falling back to mean imputation")
+                imputation_method_actual = 'mean'
+            else:
+                imputation_method_actual = imputation_method
+            log_step(f"Applying {imputation_method_actual} imputation to columns: {cols_with_missing}")
+            subject_df = impute_missing_data(
+                subject_df, columns=cols_with_missing, method=imputation_method_actual, multivariate=False
+            )
+    else:
+        log_step("No columns require imputation under MIN_REAL_POINTS rule. Skipping imputation.")
+
+    track_imputation_step(subject_df, subid, "after_imputation", 3, tracking_records, cols_present)
+
+    # Add mask back
     subject_df = pd.concat([subject_df, missingness_mask], axis=1)
-    
-    track_imputation_step(subject_df, subid, "after_mask_addition", 4, tracking_records, available_imputable_features)
-    
-    # Count missing values after imputation
-    missing_after = subject_df[available_imputable_features].isna().sum()
-    
-    # STEP 5: Save missingness tracking info
+    track_imputation_step(subject_df, subid, "after_mask_addition", 4, tracking_records, cols_present)
+
+    missing_after = subject_df[cols_present].isna().sum()
+
+    # STEP 5: Save missingness tracking for subject
     missingness_record = track_missingness(
         original_df=original_subject_df,
         imputed_df=subject_df,
-        columns=available_imputable_features,
+        columns=cols_present,           # track only columns actually present for subject
         subid=subid,
         imputation_method=imputation_method
     )
     missingness_records.append(missingness_record)
-    
-    # STEP 6: Generate diagnostic plots if requested
+
+    # STEP 6: Diagnostics (optional)
     if GENERATE_HISTO:
         diagnostic_output_path = os.path.join(output_path, 'diagnostics', imputation_method, 'histograms')
         plot_imp_diag_histo(
             original_df=original_subject_df,
             imputed_df=subject_df,
-            columns=available_imputable_features,
+            columns=cols_present,
             subid=subid,
             output_dir=diagnostic_output_path,
             method_name=imputation_method
         )
-    
+
     if GENERATE_LINE:
         diagnostic_output_path = os.path.join(output_path, 'diagnostics', imputation_method, 'lineplots')
         plot_imp_diag_timeseries(
             original_df=original_subject_df,
             imputed_df=subject_df,
-            columns=available_imputable_features,
+            columns=cols_present,
             subid=subid,
             output_dir=diagnostic_output_path,
             method_name=imputation_method
         )
-    
-    # STEP 7: Create engineered features
+
+    # STEP 7: Engineer features ONLY for columns that had >= MIN_REAL_POINTS real values (honest features)
     log_step(f"Creating engineered features for subject {subid}")
     engineered_cols = {}
-    
-    for col in available_imputable_features:
-        if col in subject_df.columns and not subject_df[col].isna().all():
-            mean = subject_df[col].mean()
-            std = subject_df[col].std()
-            if std > 0:  # Avoid division by zero
-                engineered_cols[col + '_norm'] = (subject_df[col] - mean) / std
-            else:
-                engineered_cols[col + '_norm'] = subject_df[col] - mean
-            
-            engineered_cols[col + '_delta'] = subject_df[col] - mean
-            engineered_cols[col + '_delta_1d'] = subject_df[col].diff()
-            engineered_cols[col + '_ma_7'] = subject_df[col].rolling(window=7, min_periods=1).mean()
-    
-    # Add engineered features to dataframe
+    for col in cols_with_any_data:
+        if col not in subject_df.columns:
+            continue
+        series = subject_df[col]
+        # If still all NaN (edge case), skip
+        if series.notna().sum() == 0:
+            continue
+
+        mean = series.mean(skipna=True)
+        std = series.std(skipna=True)
+
+        # Normalized
+        if pd.notna(std) and std > 0:
+            engineered_cols[col + '_norm'] = (series - mean) / std
+        else:
+            engineered_cols[col + '_norm'] = series - mean
+
+        # Deltas and rolling mean
+        engineered_cols[col + '_delta'] = series - mean
+        engineered_cols[col + '_delta_1d'] = series.diff()
+        engineered_cols[col + '_ma_7'] = series.rolling(window=7, min_periods=1).mean()
+
     if engineered_cols:
         subject_df = pd.concat([subject_df, pd.DataFrame(engineered_cols)], axis=1)
-    
-    track_imputation_step(subject_df, subid, "after_feature_engineering", 7, tracking_records, available_imputable_features)
-    
-    # STEP 8: Final data preparation
-    subject_df['subid'] = subid  # Ensure subid is present
+
+    track_imputation_step(subject_df, subid, "after_feature_engineering", 7, tracking_records, cols_present)
+
+    # STEP 8: Finalize subject
+    subject_df['subid'] = subid
     imputed_data.append(subject_df.copy())
-    
-    # Print imputation report
+
+    # Report per-feature changes
     log_step(f"Subject {subid} - Imputation report ({imputation_method}):")
-    for feature in available_imputable_features:
-        log_step(f"  {feature}: {missing_before[feature]} missing → {missing_after[feature]} missing")
+    for feature in cols_present:
+        before = int(missing_before.get(feature, 0))
+        after = int(missing_after.get(feature, 0))
+        log_step(f"  {feature}: {before} missing → {after} missing")
 
 # -------- FINAL DATA ASSEMBLY --------
 log_step("Assembling final dataset...")
 final_df = pd.concat(imputed_data, ignore_index=True)
 
-# Final quality checks
+# Duplicates check
 n_dupes = final_df.duplicated(subset=['subid', 'date']).sum()
 if n_dupes > 0:
     log_step(f"WARNING: {n_dupes} duplicate rows found in final dataset!")
@@ -333,53 +356,53 @@ else:
 log_step(f"Final dataset shape: {final_df.shape}")
 log_step(f"Final unique subjects: {final_df['subid'].nunique()}")
 
-# -------- COLUMN REORDERING --------
-# Create temporal columns list (including engineered features)
+# -------- COLUMN REORDERING (safe, based on final_df) --------
+base_temporal_bases = [c for c in IMPUTABLE_FEATURES if c in final_df.columns]
 temporal_cols = []
-for base_col in available_imputable_features:
+for base_col in base_temporal_bases:
     if base_col in final_df.columns:
         temporal_cols.append(base_col)
-        # Add engineered variants if they exist
         for suffix in ['_norm', '_delta', '_delta_1d', '_ma_7']:
             eng_col = base_col + suffix
             if eng_col in final_df.columns:
                 temporal_cols.append(eng_col)
 
-# Safely reorder columns
 available_cols = ['subid', 'date']
 col_groups = [
     temporal_cols,
-    [col for col in CLINICAL_FEATURES if col in final_df.columns],
-    [col for col in DEMO_FEATURES if col in final_df.columns],
-    [col for col in final_df.columns if col.startswith('days_since_')],
-    [col for col in final_df.columns if col.startswith('label_')]
+    [c for c in CLINICAL_FEATURES if c in final_df.columns],
+    [c for c in DEMO_FEATURES if c in final_df.columns],
+    [c for c in final_df.columns if c.startswith('days_since_')],
+    [c for c in final_df.columns if c.startswith('label_')],
+    [c for c in final_df.columns if c.endswith('_mask')],
 ]
 
-for col_group in col_groups:
-    available_cols.extend([col for col in col_group if col in final_df.columns and col not in available_cols])
+for group in col_groups:
+    for col in group:
+        if col in final_df.columns and col not in available_cols:
+            available_cols.append(col)
 
-# Reorder final dataframe
 final_df = final_df[available_cols]
 
 # -------- SAVE OUTPUTS --------
-csv_filename = f"labeled_daily_data_{imputation_method}_imputed.csv"
+csv_filename = f"labeled_daily_data_{imputation_method}_imputed_min{MIN_REAL_POINTS}.csv"
 final_df.to_csv(os.path.join(output_path, csv_filename), index=False)
 log_step(f"Saved imputed dataset: {csv_filename} with shape {final_df.shape}")
 
-# Save tracking records
+# Step-by-step tracking
 if tracking_records:
     tracking_df = pd.DataFrame(tracking_records)
-    tracking_df.to_csv(os.path.join(output_path, f'imputation_step_tracking_{imputation_method}.csv'), index=False)
+    tracking_df.to_csv(os.path.join(output_path, f'imputation_step_tracking_{imputation_method}_min{MIN_REAL_POINTS}.csv'), index=False)
     log_step("Saved step-by-step imputation tracking data.")
 
-# Save missingness report
+# Missingness report
 if missingness_records:
     missingness_df = pd.DataFrame(missingness_records)
-    missingness_report_path = os.path.join(output_path, f"missingness_report_{imputation_method}.csv")
+    missingness_report_path = os.path.join(output_path, f"missingness_report_{imputation_method}_min{MIN_REAL_POINTS}.csv")
     missingness_df.to_csv(missingness_report_path, index=False)
     log_step(f"Saved missingness report: {missingness_report_path}")
 
-# Save raw data before imputation (concatenated)
+# Raw pre-imputation (concatenated)
 if raw_data_before_imputation:
     raw_df = pd.concat(raw_data_before_imputation, ignore_index=True)
     raw_df.to_csv(os.path.join(output_path, 'all_subjects_raw_before_imputation.csv'), index=False)
@@ -391,14 +414,16 @@ final_summary = pd.DataFrame({
     'total_rows': [len(final_df)],
     'n_features': [len(final_df.columns)],
     'imputation_method': [imputation_method],
+    'min_real_points': [MIN_REAL_POINTS],
     'n_duplicates': [final_df.duplicated(subset=['subid', 'date']).sum()],
     'processing_timestamp': [timestamp]
 })
-final_summary.to_csv(os.path.join(output_path, f'imputation_summary_{imputation_method}.csv'), index=False)
+final_summary.to_csv(os.path.join(output_path, f'imputation_summary_{imputation_method}_min{MIN_REAL_POINTS}.csv'), index=False)
 log_step("Saved final imputation summary.")
 
-log_step(f"\n=== IMPUTATION PIPELINE COMPLETED ===")
+log_step("\n=== IMPUTATION PIPELINE COMPLETED ===")
 log_step(f"Method: {imputation_method}")
+log_step(f"MIN_REAL_POINTS: {MIN_REAL_POINTS}")
 log_step(f"Subjects processed: {final_df['subid'].nunique()}")
 log_step(f"Final dataset shape: {final_df.shape}")
 log_step(f"Output saved to: {output_path}")
