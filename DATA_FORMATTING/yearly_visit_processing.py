@@ -224,22 +224,32 @@ def recode_moca(score):
 yearly_df['moca_category'] = yearly_df['mocatots'].apply(recode_moca)
 
 # --- Marital Status Category Recoding ---
+# def recode_maristat(val):
+#     if val in [1, 6]:
+#         return "Married"
+#     elif val == 2:
+#         return "Widowed"
+#     elif val == 3:
+#         return "Divorced"
+#     elif val == 4:
+#         return "Separated"
+#     elif val == 5:
+#         return "Never_Married"
+#     elif val == 9:
+#         return "Unknown"
+#     else:
+#         return "Not_Reported"
+
 def recode_maristat(val):
     if val in [1, 6]:
         return "Married"
-    elif val == 2:
-        return "Widowed"
-    elif val == 3:
-        return "Divorced"
-    elif val == 4:
-        return "Separated"
-    elif val == 5:
-        return "Never_Married"
+    elif val in [2, 3, 4, 5]:
+        return "Single"
     elif val == 9:
         return "Unknown"
     else:
         return "Not_Reported"
-
+    
 yearly_df['maristat_recoded'] = yearly_df['maristat'].apply(recode_maristat)
 
 # --- Race Group Recode: White, Non-White, Unknown ---
@@ -257,6 +267,17 @@ def label_race(val):
 
 yearly_df['race_group'] = yearly_df['race'].apply(label_race)
 
+# --- Living Situation Recode: Lives Alone, Lives with Others, Unknown ---
+def label_livsitua(val):
+    if val == 1:
+        return "Lives_Alone"
+    elif val == 9:
+        return "Unknown"
+    else:
+        return "Lives_with_Others"
+
+yearly_df['livsitua_recoded'] = yearly_df['livsitua'].apply(label_livsitua)
+
 print(f"Number of subjects with yearly survey data: {len(yearly_df['subid'].unique())}")
 num_subids_6 = yearly_df['subid'].nunique()
 total_rows_6 = len(yearly_df)
@@ -272,6 +293,7 @@ yearly_df['educ_group'].value_counts().to_csv(os.path.join(output_path, 'educ_gr
 yearly_df['moca_category'].value_counts().to_csv(os.path.join(output_path, 'moca_category_counts.csv'))
 yearly_df['race_group'].value_counts().to_csv(os.path.join(output_path, 'race_group_counts.csv'))
 yearly_df['maristat_recoded'].value_counts().to_csv(os.path.join(output_path, 'maristat_recoded_counts.csv'))
+yearly_df['livsitua_recoded'].value_counts().to_csv(os.path.join(output_path, 'livsitua_recoded_counts.csv'))
 
 # --- Save recoded dataset ---
 recoded_output = os.path.join(output_path, 'yearly_recoded.csv')

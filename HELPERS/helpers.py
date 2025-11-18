@@ -470,3 +470,24 @@ def add_future_event_window_labels(df, subid_col='subid', date_col='date', event
                 .astype(int)
             )
     return df
+
+# -------- SAVE LAST TIMESTAMP PER DATASET --------
+def get_last_date(df, subid_col='subid', date_col='date'):
+    """Return last available date per subid for the given dataset."""
+    if date_col not in df.columns:
+        return pd.DataFrame(columns=[subid_col, 'last_date'])
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    last_dates = df.groupby(subid_col)[date_col].max().reset_index()
+    last_dates = last_dates.rename(columns={date_col: 'last_date'})
+    return last_dates
+
+# -------- SAVE FIRST TIMESTAMP PER DATASET --------
+def get_first_date(df, subid_col='subid', date_col='date'):
+    if date_col not in df.columns:
+        return pd.DataFrame(columns=[subid_col, 'first_date'])
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    first_dates = df.groupby(subid_col)[date_col].min().reset_index()
+    first_dates = first_dates.rename(columns={date_col: 'first_date'})
+    return first_dates

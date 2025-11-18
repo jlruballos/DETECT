@@ -2,15 +2,15 @@ import pandas as pd
 import os
 
 # Create new output directory
-output_dir = "/mnt/d/DETECT/OUTPUT/survival_intervals"
+output_dir = "/mnt/d/DETECT/OUTPUT/survival_intervals_terminal"
 os.makedirs(output_dir, exist_ok=True)
 print(f"Created output directory: {output_dir}")
 
 # Load labeled daily data
 df = pd.read_csv("/mnt/d/DETECT/OUTPUT/impute_data/labeled_daily_data_mean_imputed_min3.csv", parse_dates=["date"])
 
-label = 'label_fall_terminal' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication', label_fall_terminal'
-label_cols = ['label_hospital', 'label_accident', 'label_medication', 'label_mood_lonely', 'label_mood_blue', 'label_fall', 'label_fall_terminal']
+label = 'label_fall' # Change to 'label_hospital' 'label_mood_lonely' 'label_mood_blue', 'label_accident', 'label_medication', label_fall_terminal'
+label_cols = [ 'label_medication', 'label_mood_lonely', 'label_mood_blue', 'label_fall'] #'label_hospital', 'label_accident',
 
 # KEY CHANGE 1: Remove the filter - keep ALL subjects
 # OLD: df = df[df[label].notna()]  # <- REMOVED THIS LINE
@@ -23,15 +23,16 @@ df = df.sort_values(['subid', 'date'])
 
 # Define feature and demographic columns
 feature_cols = [
-    'steps', 'gait_speed', 'awakenings', 'bedexitcount', 'end_sleep_time',
-    'inbed_time', 'outbed_time', 'sleepscore', 'durationinsleep', 'durationawake',
-    'waso', 'hrvscore', 'start_sleep_time', 
-    'time_in_bed_after_sleep', 'tossnturncount', 'maxhr', 'avghr', 'avgrr', 
-    'Night_Bathroom_Visits', 'Night_Kitchen_Visits', 
+    #'steps',  
+    'awakenings', 'bedexitcount', 'end_sleep_time',
+      'durationinsleep', 
+     'start_sleep_time', #'avgrr', 'avghr',
+     'Night_Bathroom_Visits', #'Night_Kitchen_Visits', 'sleepscore', 'waso',
+    #'gait_speed', 'time_in_bed_after_sleep', 'tossnturncount', 'maxhr', 'avghr', , 'hrvscore', 'inbed_time', 'outbed_time', 'durationawake',
 ]
 
 demo_cols = ['sex', 'hispanic', 'race_group', 'educ_group', 'livsitua', 'independ', 'residenc', 
-              'maristat_recoded','moca_category', 'cogstat', 'age_bucket', 'age_at_visit', 'cdrglob'
+              'maristat_recoded','moca_category', 'cogstat', 'age_bucket', 'age_at_visit', 'cdrglob', 'livsitua_recoded'
              
              #not in the new data set 081925
              #'birthyr', 'alzdis',
@@ -69,6 +70,7 @@ for subid, group in df.groupby('subid'):
             "tstart": tstart,
             "tstop": tstop,
             "status": 0,  # Censored - no event occurred
+            "terminal": 0, #no terminal event
             "enum": 0,    # First (and only) interval
             # Use demographics from FIRST DAY of interval (start of follow-up)
             "sex": group.iloc[0].get("sex", None),
@@ -102,6 +104,12 @@ for subid, group in df.groupby('subid'):
         prev_index = 0
         event_num = 0
         
+        # ----Terminal event setup ----
+        terminal_label = 'label_fall_terminal' #define terminal/death event
+        is_terminal_label = terminal_label in group.columns #check if terminal label exists in dataframe
+        terminal_indices = group.index[group[terminal_label] == 1].tolist() if is_terminal_label else [] #get terminal event indices if exists
+        terminal_index = terminal_indices[0] if len(terminal_indices) > 0 else None #take first terminal event if exists
+        
         for event_idx in event_indices:
             event_date = group.loc[event_idx, 'date']
             tstart = (group.loc[prev_index, 'date'] - start_day).days
@@ -119,12 +127,15 @@ for subid, group in df.groupby('subid'):
                 feature_summary[f"{feat}_interval_mean"] = interval_mean
                 feature_summary[f"{feat}_ma7_last"] = ma7_last
                 feature_summary[f"{feat}_delta"] = delta_to_ma7
+                
+            is_terminal_event = (terminal_index is not None and event_idx == terminal_index)
 
             interval = {
                 "id": subid,
                 "tstart": tstart,
                 "tstop": tstop,
-                "status": 1,  # Event occurred
+                "status": 0 if is_terminal_event else 1,  # 1=event occurred, 0=censored for reREg only status or terminal can be 1
+                "terminal": 1 if is_terminal_event else 0, # 1=terminal event, 0=non-terminal
                 "enum": event_num,
                 # Use demographics from FIRST DAY of this interval
                 "sex": group.loc[prev_index, "sex"] if "sex" in group else None,
@@ -158,8 +169,16 @@ for subid, group in df.groupby('subid'):
 
             interval.update(feature_summary)
             intervals.append(interval)
-            prev_index = event_idx + 1
+            # prev_index = event_idx + 1
             event_num += 1
+            
+            #------ Stop if terminal event occurred -----
+            if terminal_index is not None and event_idx >= terminal_index:
+                print(f"Terminal event occurred for subid {subid} at {event_date}. Stopping further intervals.")
+                prev_index = len(group)  # Move prev_index to end to avoid further intervals
+                break
+            else:
+                prev_index = event_idx + 1
 
         # Add final censored interval (if there are days after the last event)
         if prev_index < len(group):
@@ -189,6 +208,7 @@ for subid, group in df.groupby('subid'):
                 "tstart": tstart,
                 "tstop": tstop,
                 "status": 0,  # Censored
+                "terminal": 0,  # no terminal event
                 "enum": event_num,
                 # Use demographics from FIRST DAY of this final interval
                 "sex": group.loc[prev_index, "sex"] if "sex" in group and prev_index < len(group) else group.iloc[-1].get("sex", None),
@@ -251,19 +271,21 @@ print(f"Participants with events (multiple intervals): {len(multi_event_particip
 if no_event_participants:
     example_no_event = interval_df[interval_df['id'] == no_event_participants[0]]
     print(f"\nExample participant with NO events (ID {no_event_participants[0]}):")
-    print(example_no_event[['id', 'tstart', 'tstop', 'status', 'enum']].to_string())
+    print(example_no_event[['id', 'tstart', 'tstop', 'status', 'terminal','enum']].to_string())
 
 if multi_event_participants:
     example_with_events = interval_df[interval_df['id'] == multi_event_participants[0]]
     print(f"\nExample participant WITH events (ID {multi_event_participants[0]}):")
-    print(example_with_events[['id', 'tstart', 'tstop', 'status', 'enum']].to_string())
+    print(example_with_events[['id', 'tstart', 'tstop', 'status', 'terminal', 'enum']].to_string())
 
 # Verify no final intervals have status=1
 problem_intervals = []
 for subid in interval_df['id'].unique():
     subj_data = interval_df[interval_df['id'] == subid].sort_values('tstart')
     last_interval = subj_data.iloc[-1]
-    if last_interval['status'] == 1:
+    if last_interval['terminal'] == 1 and last_interval['status'] != 0:
+        print(f"WARNING: Participant {subid} has terminal=1 but status!=1 in final interval.")
+    elif last_interval['status'] == 1 and last_interval['terminal'] == 0:
         problem_intervals.append(subid)
 
 if problem_intervals:

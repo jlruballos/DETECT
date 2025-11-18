@@ -82,7 +82,9 @@ sys.path.append(os.path.join(base_path, 'HELPERS'))
 from helpers import (
     label_exact_day,
     days_since_last_event,
-    proc_emfit_data  
+    proc_emfit_data, 
+    get_last_date,
+    get_first_date
 )
 
 program_name = 'combine_clean_data'
@@ -166,6 +168,37 @@ demo_df = pd.read_csv(DEMO_PATH)
 activity_df = pd.read_csv(ACTIVITY_PATH)
 transitions_df = pd.read_csv(TRANSITIONS_PATH)
 
+# --- Find duplicate fall entries across fall1/fall2/fall3 ---
+
+# Stack all fall columns into one long list with subid attached
+all_falls_long = (
+    falls_df[['subid', 'fall1_date', 'fall2_date', 'fall3_date']]
+    .melt(id_vars='subid', value_name='fall_date')
+    .dropna(subset=['fall_date'])
+)
+
+# Convert to datetime.date
+all_falls_long['fall_date'] = pd.to_datetime(all_falls_long['fall_date'], errors='coerce').dt.date
+
+# Count raw fall reports (should be 270)
+print("Raw fall reports:", len(all_falls_long))
+
+# Count unique fall dates per subject (should be 246 total)
+unique_falls = all_falls_long.drop_duplicates(subset=['subid', 'fall_date'])
+print("Unique fall dates:", len(unique_falls))
+
+# Identify duplicates (the extra 24)
+dupes = all_falls_long.duplicated(subset=['subid', 'fall_date'], keep=False)
+duplicate_falls = all_falls_long[dupes].sort_values(['subid', 'fall_date'])
+
+# Save or inspect
+duplicate_falls.to_csv("duplicate_falls_check.csv", index=False)
+print("Saved duplicate fall entries to duplicate_falls_check.csv")
+
+# Count how many raw falls exist before any processing
+raw_fall_count = falls_df[['fall1_date','fall2_date','fall3_date']].notna().sum().sum()
+log_step(f"[CHECK] Raw falls in survey dataset: {raw_fall_count}")
+
 # Filter to ensure each home_id maps to only one subid
 mapping_data = mapping_df.groupby('home_id').filter(lambda x: len(x) == 1)
 mapping_data = mapping_data.rename(columns={'sub_id': 'subid'})
@@ -210,7 +243,8 @@ CLINICAL_FEATURES = [
 
 DEMO_FEATURES = [
 	 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc',  'maristat', 'moca_avg', 'cogstat',
-    'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded',
+    'mocatots', 'age_at_visit', 'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded', 'livsitua_recoded',
+    'cdrglob',
     #not int he newest dataset 8/17/25
     #'birthyr', 'alzdis', 'primlang', 
 ]
@@ -247,6 +281,19 @@ subject_ids = sorted(set.union(*subid_sets))
 
 log_step(f"Total subids after union across all datasets: {len(subject_ids)}")
 
+# Debug: count all fall dates across all subjects before deduplication
+total_raw_falls = 0
+for subid in subject_ids:
+    subject_falls = falls_df[falls_df['subid'] == subid]
+    raw_fall_dates = list(chain.from_iterable([
+        subject_falls['fall1_date'].dropna().tolist(),
+        subject_falls['fall2_date'].dropna().tolist(),
+        subject_falls['fall3_date'].dropna().tolist()
+    ]))
+    total_raw_falls += len(raw_fall_dates)
+
+log_step(f"[CHECK] Total raw falls before deduplication: {total_raw_falls}")
+
 # -------- LOG MISSING SUBIDS --------
 # Track which subids are missing from each dataset
 dataset_info = {
@@ -280,6 +327,68 @@ missing_subids_df = pd.DataFrame(missing_subids_report)
 missing_subids_pivot = missing_subids_df.pivot(index='subid', columns='dataset', values='present').fillna(False)
 missing_subids_pivot.to_csv(os.path.join(output_path, 'subids_presence_by_dataset.csv'))
 log_step("Saved subids presence report by dataset.")
+
+#compute last date per dataset
+last_dates = {}
+
+#gait, steps, emfit, activity, transitions 'date'
+last_dates['gait'] = get_last_date(gait_df, 'subid', 'date')
+last_dates['watch'] = get_last_date(steps_df, 'subid', 'date')
+last_dates['emfit'] = get_last_date(emfit_df, 'subid', 'date')
+last_dates['activity'] = get_last_date(activity_df, 'subid', 'Date')
+last_dates['transitions'] = get_last_date(transitions_df, 'subid', 'date')
+
+#Demo and clinical 'visit_date'
+last_dates['detect_uds3'] = get_last_date(demo_df, 'subid', 'visit_date')
+last_dates['DETECT_huf'] = get_last_date(falls_df, 'subid', 'EndDate')
+
+
+#merge all last dated into one table
+last_dates_df = pd.DataFrame({'subid': subject_ids})
+for dataset_name, df_last in last_dates.items():
+    if not df_last.empty:
+        last_dates_df = last_dates_df.merge(
+			df_last.rename(columns={'last_date': f'last_date_{dataset_name}'}),
+			on='subid', how='left'
+		)
+
+#compute first date per dataset
+first_dates = {}
+
+#gait, steps, emfit, activity, transitions 'date'
+first_dates['gait'] = get_first_date(gait_df, 'subid', 'date')
+first_dates['watch'] = get_first_date(steps_df, 'subid', 'date')
+first_dates['emfit'] = get_first_date(emfit_df, 'subid', 'date')
+first_dates['activity'] = get_first_date(activity_df, 'subid', 'Date')
+first_dates['transitions'] = get_first_date(transitions_df, 'subid', 'date')
+
+#Demo and clinical 'visit_date'
+first_dates['detect_uds3'] = get_first_date(demo_df, 'subid', 'neuro_visit_date')
+first_dates['DETECT_huf'] = get_first_date(falls_df, 'subid', 'EndDate')
+
+# add first_date columns to last_dates_df (so now we have start + end for each dataset)
+for dataset_name, df_first in first_dates.items():
+	if not df_first.empty:
+		last_dates_df = last_dates_df.merge(
+			df_first.rename(columns={'first_date': f'first_date_{dataset_name}'}),
+			on='subid', how='left'
+		)
+  
+#duration of data collection
+for dataset in last_dates.keys():
+    start_col = f'first_date_{dataset}'
+    end_col = f'last_date_{dataset}'
+    if start_col in last_dates_df.columns and end_col in last_dates_df.columns:
+        last_dates_df[f'duration_days_{dataset}'] = (
+			pd.to_datetime(last_dates_df[end_col]) - pd.to_datetime(last_dates_df[start_col])
+		).dt.days
+
+last_dates_df = last_dates_df.sort_values('subid')
+
+#save to CSV ---
+last_dates_path = os.path.join(output_path, 'first_last_dates_by_dataset.csv')
+last_dates_df.to_csv(last_dates_path, index=False)
+log_step(f"Saved last dates by dataset to {last_dates_path}")
 
 # -------- SUMMARY TRACKERS --------
 summary_rows = []
@@ -438,6 +547,46 @@ for subid in subject_ids:
     ]))
     
     fall_dates = sorted(set([pd.to_datetime(d).date() for d in raw_fall_dates]))
+    
+    # --- New composite fall labels (from survey pipeline) ---
+	# --- New composite fall labels (from survey pipeline) ---
+    if 'fall_with_injury' in subject_falls.columns and 'fall_dates' in subject_falls.columns:
+        injury_dates = list(chain.from_iterable([
+			parse_datetime_string_list(pd.Series([dlist]), 'fall_dates')
+			for i, dlist in subject_falls[['fall_with_injury', 'fall_dates']].dropna().itertuples(index=False)
+			if i == 1
+		]))
+    else:
+       injury_dates = []
+       
+    if 'fall_with_hospital' in subject_falls.columns and 'fall_dates' in subject_falls.columns:
+        hosp_dates = list(chain.from_iterable([
+			parse_datetime_string_list(pd.Series([dlist]), 'fall_dates')
+			for i, dlist in subject_falls[['fall_with_hospital', 'fall_dates']].dropna().itertuples(index=False)
+			if i == 1
+		]))
+    else:
+       hosp_dates = []
+       
+    if 'fall_terminal' in subject_falls.columns and 'fall_dates' in subject_falls.columns:
+        term_dates = list(chain.from_iterable([
+			parse_datetime_string_list(pd.Series([dlist]), 'fall_dates')
+			for i, dlist in subject_falls[['fall_terminal', 'fall_dates']].dropna().itertuples(index=False)
+			if i == 1
+		]))
+    else:
+       term_dates = []
+
+	# Convert to proper datetime.date format
+    injury_dates = sorted(set([pd.to_datetime(d).date() for d in injury_dates]))
+    hosp_dates   = sorted(set([pd.to_datetime(d).date() for d in hosp_dates]))
+    term_dates   = sorted(set([pd.to_datetime(d).date() for d in term_dates]))
+
+    # Track unique fall dates count per subject
+    if 'unique_fall_counter' not in locals():
+        unique_fall_counter = 0
+    unique_fall_counter += len(fall_dates)
+
     mood_blue_dates = sorted([d.date() for d in subject_falls['mood_blue_date'].dropna()])
     mood_lonely_dates = sorted([d.date() for d in subject_falls['mood_lonely_date'].dropna()])
 
@@ -464,6 +613,8 @@ for subid in subject_ids:
         log_step(f"  Sample accident dates: {accident_dates[:3]}")
     if medication_dates:
         log_step(f"  Sample medication dates: {medication_dates[:3]}")
+        
+    print(subject_falls.columns.tolist())
 
     # Create temporal context features
     daily_df['days_since_fall'] = daily_df['date'].apply(lambda d: days_since_last_event(d, fall_dates))
@@ -481,6 +632,11 @@ for subid in subject_ids:
     daily_df['label_accident'] = daily_df['date'].apply(lambda d: label_exact_day(d, accident_dates))
     daily_df['label_medication'] = daily_df['date'].apply(lambda d: label_exact_day(d, medication_dates))
     daily_df['label'] = daily_df[['label_fall', 'label_hospital', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']].max(axis=1)
+    
+    # --- Add new fall variant labels ---
+    daily_df['label_fall_injury'] = daily_df['date'].apply(lambda d: label_exact_day(d, injury_dates))
+    daily_df['label_fall_hospital'] = daily_df['date'].apply(lambda d: label_exact_day(d, hosp_dates))
+    daily_df['label_fall_terminal'] = daily_df['date'].apply(lambda d: label_exact_day(d, term_dates))
 
     track_step(daily_df, subid, "after_event_processing", 7, tracking_records)
     
@@ -491,10 +647,15 @@ for subid in subject_ids:
         'subid': subid,
         'n_rows_final': len(daily_df)
     })
+    
+print("Total unique fall dates across all subjects:", unique_fall_counter)
 
 #----------FINAL PROCESSING----------
 print("Saving labeled daily data...")
 final_df = pd.concat(all_daily_data, ignore_index=True)
+
+# Debug: check how many fall labels made it into the final dataset
+print("Final labeled falls:", final_df['label_fall'].sum())
 
 # Final duplicate check
 n_dupes = final_df.duplicated(subset=['subid', 'date']).sum()
@@ -515,7 +676,7 @@ col_groups = [
     TRANSITION_FEATURES,
     DEMO_FEATURES,
     ['days_since_fall', 'days_since_hospital', 'days_since_mood_blue', 'days_since_mood_lonely', 'days_since_accident', 'days_since_medication'],
-    ['label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication']
+    ['label_fall', 'label_hospital', 'label', 'label_mood_blue', 'label_mood_lonely', 'label_accident', 'label_medication', 'label_fall_injury', 'label_fall_hospital', 'label_fall_terminal'],
 ]
 
 for col_group in col_groups:

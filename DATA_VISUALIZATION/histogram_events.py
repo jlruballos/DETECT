@@ -14,7 +14,10 @@ os.makedirs(output_dir, exist_ok=True)
 
 # ---------- Load Data ----------
 df = pd.read_csv(input_path, parse_dates=[
-    'fall1_date', 'mood_blue_date', 'mood_lonely_date',
+    'fall1_date', 'fall2_date', 'fall3_date',
+    'hospital_visit', 'hospital_visit_2',
+    'ACDT1_DATE', 'ACDT2_DATE', 'ACDT3_DATE',
+    'mood_blue_date', 'mood_lonely_date',
     'MED1_DATE', 'MED2_DATE', 'MED3_DATE', 'MED4_DATE'
 ])
 df['subid'] = df['subid'].astype(str)
@@ -29,58 +32,70 @@ event_configs = {
     'lonely_mood': ['mood_lonely_date']
 }
 
+num_falls_1 = df['fall1_date'].notna().sum().sum()
+
+print(f"Number of falls recorded in step 10: {num_falls_1}")
+
+num_falls_2 = df['fall2_date'].notna().sum().sum()
+
+print(f"Number of falls recorded in step 10: {num_falls_2}")
+
+num_falls_3 = df['fall3_date'].notna().sum().sum()
+
+print(f"Number of falls recorded in step 10: {num_falls_3}")
+
 # ---------- Processing Function ----------
-def generate_aggregate_histogram(df, date_cols, event_name):
-    all_events = []
+def generate_weekly_histogram(df, date_cols, event_name):
+    """Builds a histogram of participant-weeks per column (fall1, fall2, etc.)"""
 
-    for col in date_cols:
-        if col in df.columns:
-            temp = df[['subid', col]].dropna().copy()
-            temp.columns = ['subid', 'event_date']
-            temp['event_date'] = pd.to_datetime(temp['event_date'], errors='coerce')
-            all_events.append(temp)
+    weekly_counts = {}
 
-    if not all_events:
+    for i, col in enumerate(date_cols, start=1):
+        if col not in df.columns:
+            continue
+
+        temp = df[['subid', col]].dropna().copy()
+        temp.columns = ['subid', 'event_date']
+        temp['event_date'] = pd.to_datetime(temp['event_date'], errors='coerce')
+        temp = temp.dropna()
+
+        if temp.empty:
+            continue
+
+        # Bin into weeks (aligned to Monday)
+        temp['week'] = temp['event_date'].dt.to_period('W-MON').apply(lambda r: r.start_time)
+
+        # Each (subid, week) counts once for that column
+        weekly_counts[f"{event_name}_{i}"] = temp[['subid','week']].drop_duplicates().shape[0]
+
+    if not weekly_counts:
         return
 
-    combined = pd.concat(all_events).dropna()
-    combined['week'] = combined['event_date'].dt.to_period('W').apply(lambda r: r.start_time)
+    # ---- Plot ----
+    plt.figure(figsize=(7,5))
+    ax = sns.barplot(x=list(weekly_counts.keys()), y=list(weekly_counts.values()), color="steelblue")
 
-    # Count events per (subid, week)
-    weekly_counts = combined.groupby(['subid', 'week']).size().reset_index(name='event_count')
+    for bar, val in zip(ax.patches, weekly_counts.values()):
+        h = bar.get_height()
+        ax.annotate(f"{val}", (bar.get_x() + bar.get_width()/2, h),
+                    ha='center', va='bottom')
 
-    # Build full grid of (subid, week)
-    all_weeks = pd.date_range(combined['week'].min(), combined['week'].max(), freq='W-MON')
-    all_subid_week = pd.MultiIndex.from_product([df['subid'].unique(), all_weeks], names=['subid', 'week'])
-    merged = pd.DataFrame(index=all_subid_week).reset_index()
-    merged = merged.merge(weekly_counts, on=['subid', 'week'], how='left').fillna(0)
-    merged['event_count'] = merged['event_count'].astype(int)
-
-    # Count how many participant-weeks had 0, 1, 2... events
-    hist = merged['event_count'].value_counts().sort_index().reset_index()
-    hist.columns = ['num_events', 'num_participant_weeks']
-
-    # ---------- Plot ----------
-    plt.figure(figsize=(10, 5))
-    ax = sns.barplot(data=hist, x='num_events', y='num_participant_weeks', color='steelblue')
-    plt.title(f'Event Count per Participant-Week: {event_name.capitalize()}')
-    plt.xlabel(f'{event_name.capitalize()} Events in a Week')
-    plt.ylabel('Number of Participant-Weeks')
-
-    for bar in ax.patches:
-        count = int(bar.get_height())
-        if count > 0:
-            ax.annotate(str(count),
-                        (bar.get_x() + bar.get_width() / 2, count),
-                        ha='center', va='bottom')
-
+    plt.title(f"Weekly Distribution of {event_name.capitalize()} Events")
+    plt.ylabel("Number of Participant-Weeks")
+    plt.xlabel("Event Columns")
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"{event_name}_event_histogram.png"))
+    plt.savefig(os.path.join(output_dir, f"{event_name}_weekly_histogram.png"))
     plt.close()
+
+    # Console print
+    print(f"==== {event_name.capitalize()} ====")
+    for k,v in weekly_counts.items():
+        print(f"{k}: {v}")
+    print(f"Total {event_name}: {sum(weekly_counts.values())}\n")
 
 # ---------- Run ----------
 for event_name, date_cols in event_configs.items():
-    generate_aggregate_histogram(df, date_cols, event_name)
+    generate_weekly_histogram(df, date_cols, event_name)
 
 # ---------- Summary Ratio Plot ----------
 summary_rows = []

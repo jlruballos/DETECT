@@ -3,27 +3,28 @@
 # ---------------------------------------
 
 # Load libraries
-library(tidyverse)
-library(reReg)
-library(reda) 
+library(tidyverse) #includes dplyr, ggplot2, readr, etc. 
+library(reReg) #recurrent event regression modeling
+library(reda) #tool for recurrent event data (plotting etc.)
 
-library(dplyr)
-library(forcats)
-library(stringr)
+library(dplyr) #data manipulation
+library(forcats) #factor manipulation
+library(stringr) #string manipulation
 
 # Load dataset
-df <- read_csv("D:/DETECT/OUTPUT/survival_intervals/intervals_all_participants_label_mood_lonely.csv")
+df <- read_csv("D:/DETECT/OUTPUT/survival_intervals/intervals_all_participants_label_fall.csv")
 
-event_label <- "Lonely"  # Change this to match the current event type
+event_label <- "Fall"  # Change this to match the current event type
 
-# Factorize key variables
+# Factorize key/categorical variables
+#cox models require categorical variables as factors so dummy variables are created
 df$sex <- factor(df$sex)
 #df$amyloid <- factor(df$amyloid, labels = c("negative", "positive"))
 df$amyloid <- factor(df$amyloid)
 df$hispanic <- factor(df$hispanic)
 #df$age <- factor(df$age)
-df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
-df$age_cat <- factor(df$age_cat)
+#df$age_cat <- cut(df$age, breaks = c(65, 70, 75, 80, 85, 100), right = FALSE)
+#df$age_cat <- factor(df$age_cat)
 df$age_ <- factor(df$age_bucket)
 #df$age_ <- factor(df$age_at_visit)
 #df$race <- factor(df$race)
@@ -43,9 +44,9 @@ df$race_group <- factor(df$race_group)
 #df$moca_avg <- factor(df$moca_avg)
 
 # Replace NA in alzdis with 0
-df$alzdis[is.na(df$alzdis)] <- 0
+#df$alzdis[is.na(df$alzdis)] <- 0
 
-df$alzdis <- factor(df$alzdis)
+#df$alzdis <- factor(df$alzdis)
 
 #df$group <- paste0("Educ ", df$educ, " | Age ", df$age_cat, " | ", df$amyloid)
 
@@ -59,6 +60,8 @@ df$group <- paste0( " | ", df$amyloid)
 #     age = age_at_visit,
 #     moca = moca_category
 #   )
+
+#recoding with fct_recode to give readable labels for plots.
 
 df$sex <- fct_recode(df$sex,
                      "_Male" = "1",
@@ -80,10 +83,10 @@ df$livsitua <- fct_recode(df$livsitua,
                           "_Unknown" = "9"
 )
 
-df$alzdis <- fct_recode(df$alzdis,
-                        "_Not Present" = "0",
-                        "_Present" = "1"
-)
+# df$alzdis <- fct_recode(df$alzdis,
+#                         "_Not Present" = "0",
+#                         "_Present" = "1"
+# )
 
 df$cogstat <- fct_recode(df$cogstat,
                          "_Undeterminable" = "0",
@@ -102,16 +105,18 @@ df$residenc <- fct_recode(df$residenc,
 )
 
 # Define baseline demographic covariates
+#these demographic variables will always be included
 baseline_covars <- c( "sex", "amyloid", "moca_",
-                     "livsitua", "residenc", "alzdis", "maristat_", "cogstat")
+                     "livsitua", "residenc",  "maristat_", "cogstat")
 
 # baseline_covars <- c("age_at_visit", "sex", "amyloid",  "moca_category",
-#                      "livsitua", "residenc", "alzdis", "maristat", "cogstat")
+#                      "livsitua", "residenc", "maristat", "cogstat")
 
 # Prepare data for plotting recurrent events (filter missing)
 plot_df <- df %>% drop_na(tstart, tstop, status, id, group)
 
 # Create Recur object for plotting
+#each participant(id) can have multiple rows each with a time interval up to the next event
 recur_obj_plot <- Recur(time = plot_df$tstop, id = plot_df$id, event = plot_df$status, origin = 0)
 
 plot_df <- plot_df %>% arrange(id, tstop)
@@ -143,7 +148,7 @@ run_model <- function(df, feature_suffix, label) {
   }
   
   # Build Recur object
-  recur_obj <- Recur(time = temp_df$tstop, id = temp_df$id, event = temp_df$status, origin = 0)
+  recur_obj <- Recur(time = temp_df$tstop, id = temp_df$id, event = temp_df$status)
   
   # Build formula
   model_formula <- as.formula(paste("recur_obj ~", paste(covars, collapse = " + ")))

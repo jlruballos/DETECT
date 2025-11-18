@@ -36,6 +36,7 @@ matplotlib.use('Agg')  # Use non-interactive backend for saving plots
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import numpy as np
 
 program_name = 'survey_processing'
 
@@ -115,11 +116,20 @@ missing_2[missing_2 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_2
 
 #------ Step 3: Fill fall1_date if FALL == 1 ------
 log_step("Step 3: Filling fall1_date from start_date if FALL == 1 and missing.")
+
+num_falls = len(survey_df['FALL1_DATE'])
+
+print(f"Number of falls recorded before dropping nulls: {num_falls}")
+
 # Ensure date columns are datetime
 survey_df['fall1_date'] = pd.to_datetime(survey_df['FALL1_DATE'], errors='coerce')
 survey_df['fall2_date'] = pd.to_datetime(survey_df['FALL2_DATE'], errors='coerce')
 survey_df['fall3_date'] = pd.to_datetime(survey_df['FALL3_DATE'], errors='coerce')
-survey_df['start_date'] = pd.to_datetime(survey_df['StartDate'], errors='coerce')
+survey_df['start_date'] = pd.to_datetime(survey_df['start_date'], errors='coerce')
+
+num_falls_1 = survey_df['fall1_date'].notna().sum().sum()
+
+print(f"Number of falls recorded after dropping NAs: {num_falls_1}")
 
 # # Fill missing fall1_date with (survey_date - 1 day) if fall == 1
 # survey_df['fall1_date'] = survey_df.apply(
@@ -142,7 +152,7 @@ survey_df['fall3_date'] = survey_df.apply(
 )
 
 # # Ensure date columns are datetime
-# survey_df['fall1_date'] = pd.to_datetime(survey_df['fall1_date'], errors='coerce').dt.date
+survey_df['fall1_date'] = pd.to_datetime(survey_df['fall1_date'], errors='coerce').dt.date
 survey_df['fall2_date'] = pd.to_datetime(survey_df['fall2_date'], errors='coerce').dt.date
 survey_df['fall3_date'] = pd.to_datetime(survey_df['fall3_date'], errors='coerce').dt.date
 # survey_df['start_date'] = pd.to_datetime(survey_df['start_date'], errors='coerce').dt.date
@@ -198,7 +208,6 @@ survey_df['accident_dates'] = survey_df.apply(
 		[date for date in [row['ACDT1_DATE'], row['ACDT2_DATE'], row['ACDT3_DATE']] if pd.notnull(date)]
 	), axis=1
 )
-
 
 num_subids_5 = survey_df['subid'].nunique()
 total_rows_5 = len(survey_df)
@@ -397,8 +406,54 @@ daily_status_out = os.path.join(output_path, 'survey_daily_status.csv')
 daily_status.sort_values(['subid', 'start_date']).to_csv(daily_status_out, index=False)
 log_step(f"Step 9.5: Saved per-day status counts to {daily_status_out}")
 
-#------ Step 10: Check for duplicates ------
-log_step("Checking for duplicate (subid, date) rows.")
+#------ Step 10: Derive Composite Fall Labels (injury, hospital, terminal) ------
+log_step("Step 10: Creating composite fall labels (injury, hospital, terminal).")
+
+#ensure FALL, HCRU and FALL1_INJ are numeric (1=yes, 2=no)
+for c in ['FALL_status_code','HCRU_status_code','FALL1_INJ']:
+	if c in survey_df.columns:
+		survey_df[c] = pd.to_numeric(survey_df[c], errors='coerce')
+
+#---1. FAll with Injury---
+survey_df['fall_with_injury'] = np.where(
+	(survey_df.get('FALL1_INJ', 0) == 1) & (survey_df.get('FALL_status_code', 0) == 1),
+    1,0
+)
+
+#---2. Fall with Hospital Visit---
+survey_df['fall_with_hospital'] = np.where(
+	(survey_df.get('FALL_status_code', 0) == 1) & (survey_df.get('HCRU_status_code', 0) == 1),
+	1,0
+)
+
+#---3. Fall with Terminal Event---
+survey_df['fall_terminal'] = np.where(
+    (survey_df['fall_with_injury'] == 1) | (survey_df['fall_with_hospital'] == 1),
+    1, 0
+)
+
+# Log counts after consolidation
+num_subids_10 = survey_df['subid'].nunique()
+total_rows_10 = len(survey_df)
+log_step(f"Step 10: {num_subids_10} unique subids, {total_rows_10} total rows after consolidation to one row per day.")
+row_counts_10 = survey_df['subid'].value_counts().sort_index()
+row_counts_10.to_csv(os.path.join(output_path, 'row_counts_step_10.csv'))
+missing_10 = survey_df.isnull().sum()
+missing_10[missing_10 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_10.csv'))
+
+#------4. Logging Summary ----
+n_injury = survey_df['fall_with_injury'].sum()
+n_hospital = survey_df['fall_with_hospital'].sum()
+n_terminal = survey_df['fall_terminal'].sum()
+log_step(f"Step 12 summary: {n_injury} fall_with_injury events, {n_hospital} fall_with_hospital events, {n_terminal} fall_terminal events.")
+
+#------ Save final before dropping duplicates ------
+output_final = os.path.join(output_path, 'survey_cleaned.csv')
+survey_df.to_csv(output_final, index=False)
+log_step(f"Cleaned before dropping duplicates survey data saved to: {output_final}")
+
+#------ Step 11: Check for duplicates ------
+log_step("Step 11: Checking for duplicate (subid, date) rows.")
 duplicates = survey_df.duplicated(subset=['subid', 'start_date'], keep=False)
 dup_rows = survey_df[duplicates]
 if not dup_rows.empty:
@@ -407,13 +462,38 @@ if not dup_rows.empty:
 else:
     log_step("No duplicate rows found.")
 
-#------ Save final unconsilidated cleaned data ------
+num_falls_1 = survey_df['fall1_date'].notna().sum().sum()
+
+print(f"Number of falls recorded in step 10: {num_falls_1}")
+
+#------ Step 11: Drop duplicates  ------
+survey_df_copy = survey_df.drop_duplicates(subset=['subid', 'start_date'], keep='first').copy()
+
+log_step("Checking for duplicate (subid, date) rows.")
+duplicates = survey_df_copy.duplicated(subset=['subid', 'start_date'], keep=False)
+dup_rows = survey_df_copy[duplicates]
+if not dup_rows.empty:
+    log_step(f"Found {len(dup_rows)} duplicate rows after dropping duplicates. Saving to 'duplicate_entries_after_dropping.csv'.")
+    dup_rows.to_csv(os.path.join(output_path, 'duplicate_entries_after_dropping.csv'), index=False)
+else:
+    log_step("No duplicate rows found.")
+    
+# Log counts after consolidation
+num_subids_11 = survey_df_copy['subid'].nunique()
+total_rows_11 = len(survey_df_copy)
+log_step(f"Step 11: {num_subids_11} unique subids, {total_rows_11} total rows after dropping duplicates to one row per day.")
+row_counts_11 = survey_df_copy['subid'].value_counts().sort_index()
+row_counts_11.to_csv(os.path.join(output_path, 'row_counts_step_11.csv'))
+missing_11 = survey_df_copy.isnull().sum()
+missing_11[missing_11 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_11.csv'))
+
+#------ Save final unconsolidated cleaned data ------
 output_final = os.path.join(output_path, 'survey_cleaned_unconsolidated.csv')
-survey_df.to_csv(output_final, index=False)
+survey_df_copy.to_csv(output_final, index=False)
 log_step(f"Cleaned unconsolidated survey data saved to: {output_final}")
 
-#------ Step 11: Consolidate to one row per (subid, start_date) ------
-log_step("Step 11: Consolidating multiple same-day submissions into a single record per (subid, start_date) [aggregate].")
+#------ Step 12: Consolidate to one row per (subid, start_date) ------
+log_step("Step 12: Consolidating multiple same-day submissions into a single record per (subid, start_date) [aggregate].")
 
 import numpy as np
 
@@ -430,7 +510,7 @@ if 'StartDate' in survey_df.columns:
     survey_df['StartDate'] = pd.to_datetime(survey_df['StartDate'], errors='coerce')
 
 #    c) Event flags to numeric (handle "1"/"2" strings)
-for c in ['FALL','HCRU','ACDT','MED','MOOD_BLUE','MOOD_LONV']:
+for c in ['FALL','HCRU','ACDT','MED','MOOD_BLUE','MOOD_LONV', 'FALL1_INJ', 'fall_with_injury', 'fall_with_hospital', 'fall_terminal']:
     if c in survey_df.columns:
         survey_df[c] = pd.to_numeric(survey_df[c], errors='coerce')
 
@@ -454,7 +534,7 @@ if 'daily_duration_seconds' in metrics.columns:
         survey_daily_df = survey_daily_df.drop(columns=[c for c in survey_daily_df.columns if c.endswith('_m')])
 
 # 4) Collapse flags: any yes(1) > any no(2) > else 99
-for flag in ['FALL','HCRU','ACDT','MED','MOOD_BLUE','MOOD_LONV']:
+for flag in ['FALL','HCRU','ACDT','MED','MOOD_BLUE','MOOD_LONV', 'FALL1_INJ', 'fall_with_injury', 'fall_with_hospital', 'fall_terminal']:
     if flag in survey_df.columns:
         collapsed = grp[flag].apply(lambda s: 1 if (s == 1).any()
                                              else (2 if (s == 2).any() else 99))
@@ -509,15 +589,56 @@ for stable in ['sex','age','age_at_visit','amyloid','hispanic','marital','alzdis
 survey_df = survey_daily_df.sort_values(['subid','start_date']).reset_index(drop=True)
 
 # Log counts after consolidation
-num_subids_11 = survey_df['subid'].nunique()
-total_rows_11 = len(survey_df)
-log_step(f"Step 11: {num_subids_11} unique subids, {total_rows_11} total rows after consolidation to one row per day.")
-row_counts_11 = survey_df['subid'].value_counts().sort_index()
-row_counts_11.to_csv(os.path.join(output_path, 'row_counts_step_11.csv'))
-missing_11 = survey_df.isnull().sum()
-missing_11[missing_11 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_11.csv'))
+num_subids_12 = survey_df['subid'].nunique()
+total_rows_12 = len(survey_df)
+log_step(f"Step 12: {num_subids_12} unique subids, {total_rows_12} total rows after consolidation to one row per day.")
+row_counts_12 = survey_df['subid'].value_counts().sort_index()
+row_counts_12.to_csv(os.path.join(output_path, 'row_counts_step_12.csv'))
+missing_12 = survey_df.isnull().sum()
+missing_12[missing_12 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_12.csv'))
 
-#------ Step 12: Check for duplicates after consolidation ------
+""" #------ Step 12: Derive Composite Fall Labels (injury, hospital, terminal) ------
+log_step("Creating composite fall labels (injury, hospital, terminal).")
+
+#ensure FALL, HCRU and FALL1_INJ are numeric (1=yes, 2=no)
+for c in ['FALL','HCRU','FALL1_INJ']:
+	if c in survey_df.columns:
+		survey_df[c] = pd.to_numeric(survey_df[c], errors='coerce')
+
+#---1. FAll with Injury---
+survey_df['fall_with_injury'] = np.where(
+	(survey_df.get('FALL1_INJ', 0) == 1) & (survey_df.get('FALL', 0) == 1),
+    1,0
+)
+
+#---2. Fall with Hospital Visit---
+survey_df['fall_with_hospital'] = np.where(
+	(survey_df.get('FALL', 0) == 1) & (survey_df.get('HCRU', 0) == 1),
+	1,0
+)
+
+#---3. Fall with Terminal Event---
+survey_df['fall_terminal'] = np.where(
+    (survey_df['fall_with_injury'] == 1) | (survey_df['fall_with_hospital'] == 1),
+    1, 0
+)
+
+# Log counts after consolidation
+num_subids_12 = survey_df['subid'].nunique()
+total_rows_12 = len(survey_df)
+log_step(f"Step 12: {num_subids_12} unique subids, {total_rows_12} total rows after consolidation to one row per day.")
+row_counts_12 = survey_df['subid'].value_counts().sort_index()
+row_counts_12.to_csv(os.path.join(output_path, 'row_counts_step_12.csv'))
+missing_12 = survey_df.isnull().sum()
+missing_12[missing_12 > 0].to_csv(os.path.join(output_path, 'missing_counts_step_12.csv'))
+
+#------4. Logging Summary ----
+n_injury = survey_df['fall_with_injury'].sum()
+n_hospital = survey_df['fall_with_hospital'].sum()
+n_terminal = survey_df['fall_terminal'].sum()
+log_step(f"Step 12 summary: {n_injury} fall_with_injury events, {n_hospital} fall_with_hospital events, {n_terminal} fall_terminal events.")
+ """
+#------ Step 13: Check for duplicates after consolidation ------
 log_step("Checking for duplicate (subid, date) rows after consolidation.")
 duplicates = survey_df.duplicated(subset=['subid', 'start_date'], keep=False)
 dup_rows = survey_df[duplicates]
@@ -530,13 +651,13 @@ else:
 # Save the consolidated daily dataset (be explicit)
 output_daily = os.path.join(output_path, 'survey_cleaned_consolidated.csv')
 survey_df.to_csv(output_daily, index=False)
-log_step(f"Step 11: Saved consolidated daily dataset to: {output_daily}")
+log_step(f"Step 13: Saved consolidated daily dataset to: {output_daily}")
  
 #------ Final Summary Table ------
 summary = pd.DataFrame({
-                'unique_subids': [num_subids_0, num_subids_1, num_subids_2, num_subids_3, num_subids_4, num_subids_5, num_subids_6, num_subids_7, num_subids_8, num_subids_9, num_subids_11],
-                'n_rows':        [total_rows_0, total_rows_1, total_rows_2, total_rows_3, total_rows_4, total_rows_5, total_rows_6, total_rows_7, total_rows_8, total_rows_9, total_rows_11]
-}, index=['step_0_initial', 'step_1_extracted_date', 'step_2_drop_na', 'step_3_fill_fall_dates', 'step_4_hospital_dates', 'step_5_accident_dates', 'step_6_medication_dates', 'step_7_mood_dates', 'step_8_daily_metrics', 'step_9_per_day_status', 'step_11_consolidation'])
+                'unique_subids': [num_subids_0, num_subids_1, num_subids_2, num_subids_3, num_subids_4, num_subids_5, num_subids_6, num_subids_7, num_subids_8, num_subids_9, num_subids_10, num_subids_11, num_subids_12],
+                'n_rows':        [total_rows_0, total_rows_1, total_rows_2, total_rows_3, total_rows_4, total_rows_5, total_rows_6, total_rows_7, total_rows_8, total_rows_9, total_rows_10, total_rows_11, total_rows_12]
+}, index=['step_0_initial', 'step_1_extracted_date', 'step_2_drop_na', 'step_3_fill_fall_dates', 'step_4_hospital_dates', 'step_5_accident_dates', 'step_6_medication_dates', 'step_7_mood_dates', 'step_8_daily_metrics', 'step_9_per_day_status', 'step_10_composite_fall_labels','step_11_drop_duplicates',  'step_12_consolidation', ])
 
 summary.to_csv(os.path.join(output_path, 'summary_pipeline_overview.csv'))
 print("Summary saved to summary_pipeline_overview.csv")
@@ -552,14 +673,16 @@ missing_all = pd.DataFrame({
     'step_7': missing_7,
     'step_8': missing_8,
     'step_9': missing_9,
-    'step_11': missing_11
+    'step_10': missing_10,
+    'step_11': missing_11,
+    'step_12': missing_12
 }).fillna(0).astype(int)
 
 missing_all.to_csv(os.path.join(output_path, 'missing_counts_summary.csv'))
 print("Missing value summary saved to missing_counts_summary.csv")
 
-#------ Step 13: Generate Weekly Frequency Tables ------
-log_step("Step 13: Generating weekly frequency tables for all events.")
+#------ Step 14: Generate Weekly Frequency Tables ------
+log_step("Step 14: Generating weekly frequency tables for all events.")
 
 def explode_event(df, col, label):
     exploded = df[['subid', col]].explode(col).dropna()
@@ -573,6 +696,15 @@ fall_freq     = explode_event(survey_df, 'fall_dates',       'fall')
 hospital_freq = explode_event(survey_df, 'hospital_dates',   'hospital')
 accident_freq = explode_event(survey_df, 'accident_dates',   'accident')
 med_freq      = explode_event(survey_df, 'medication_dates', 'medication')
+fall_injury_freq = explode_event(
+	survey_df[survey_df['fall_with_injury'] == 1], 'fall_dates', 'fall_injury'
+)
+fall_hospital_freq = explode_event(
+	survey_df[survey_df['fall_with_hospital'] == 1], 'fall_dates', 'fall_hospital'
+)
+fall_terminal_freq = explode_event(
+	survey_df[survey_df['fall_terminal'] == 1], 'fall_dates', 'fall_terminal'
+)
 
 # Scalar mood events (treat as single dates)
 def scalar_event(df, date_col, label):
@@ -595,6 +727,9 @@ accident_freq.to_csv(os.path.join(freq_output_path, 'accident_weekly.csv'), inde
 med_freq.to_csv(os.path.join(freq_output_path, 'medication_weekly.csv'), index=False)
 mood_blue_freq.to_csv(os.path.join(freq_output_path, 'blue_mood_weekly.csv'), index=False)
 mood_lonely_freq.to_csv(os.path.join(freq_output_path, 'lonely_mood_weekly.csv'), index=False)
+fall_injury_freq.to_csv(os.path.join(freq_output_path, 'fall_injury_weekly.csv'), index=False)
+fall_hospital_freq.to_csv(os.path.join(freq_output_path, 'fall_hospital_weekly.csv'), index=False)
+fall_terminal_freq.to_csv(os.path.join(freq_output_path, 'fall_terminal_weekly.csv'), index=False)
 
 log_step("Weekly frequency tables saved to event_frequency/ directory.")
 
@@ -615,5 +750,8 @@ plot_frequency(accident_freq, 'accident_count', 'accident')
 plot_frequency(med_freq, 'medication_count', 'medication')
 plot_frequency(mood_blue_freq, 'blue_mood_count', 'blue_mood')
 plot_frequency(mood_lonely_freq, 'lonely_mood_count', 'lonely_mood')
+plot_frequency(fall_injury_freq, 'fall_injury_count', 'fall_injury')
+plot_frequency(fall_hospital_freq, 'fall_hospital_count', 'fall_hospital')
+plot_frequency(fall_terminal_freq, 'fall_terminal_count', 'fall_terminal')
 
 log_step("Weekly plots saved as PNGs in event_frequency/.")

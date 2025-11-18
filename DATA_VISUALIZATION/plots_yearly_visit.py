@@ -20,7 +20,7 @@ df['year'] = df['visit_date'].dt.year
 
 # ---------- Demographic Features ----------
 DEMO_FEATURES = [
-    'birthyr', 'sex', 'hispanic', 'race_group', 'educ_group', 'livsitua', 'independ',
+    'birthyr', 'sex', 'hispanic', 'race_group', 'educ_group', 'livsitua_recoded', 'independ',
     'residenc', 'alzdis', 'maristat', 'cogstat',
     'primlang', 'moca_category', 'age_bucket', 'birthyr', 'alzdis', 'maristat_recoded',
 ]
@@ -65,9 +65,12 @@ def plot_side_by_side(df, feature, kind='count'):
     total_per_year = plot_df.groupby('year')['count'].transform('sum')
     if kind == 'prop':
         plot_df['count'] = 100 * plot_df['count'] / total_per_year
+    
+    # --- Order by overall mean count ---
+    order = plot_df.groupby(feature)['count'].mean().sort_values().index
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    sns.barplot(data=plot_df, x='year', y='count', hue=feature, ax=ax)
+    sns.barplot(data=plot_df, x='year', y='count', hue=feature, hue_order=order, ax=ax)
 
     for container in ax.containers:
         for bar in container:

@@ -30,8 +30,8 @@ import matplotlib.pyplot as plt
 
 # -------- CONFIG --------
 USE_WSL = True  # True if running inside WSL (Linux on Windows)
-GENERATE_HISTO = False
-GENERATE_LINE = False
+GENERATE_HISTO = True
+GENERATE_LINE = True
 
 # Minimum number of real points a subject must have for a column to be eligible
 MIN_REAL_POINTS = 3  # <-- tune this; 3–7 is a reasonable range
@@ -150,7 +150,7 @@ CLINICAL_FEATURES = [
 DEMO_FEATURES = [
     'birthyr', 'sex', 'hispanic', 'race', 'educ', 'livsitua', 'independ', 'residenc',
     'alzdis', 'maristat', 'moca_avg', 'cogstat', 'primlang', 'mocatots', 'age_at_visit',
-    'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded'
+    'age_bucket', 'educ_group', 'moca_category', 'race_group', 'maristat_recoded', 'cdrglob', 'livsitua_recoded'
 ]
 
 IMPUTABLE_FEATURES = FEATURES + EMFIT_FEATURES + ACTIVITY_FEATURES + TRANSITION_FEATURES
